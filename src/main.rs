@@ -1,4 +1,5 @@
 use std::convert::Infallible;
+use std::io::Error;
 use std::net::SocketAddr;
 use std::process::{Child, Command};
 
@@ -9,14 +10,16 @@ use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use std::sync::{Arc, Mutex};
+use regex::Regex;
 use tokio::net::TcpListener;
+use clap::Parser;
 
 struct Player {
     player_instance: Mutex<Option<Child>>,
 }
 
 impl Player {
-    pub fn new() -> Player {
+    fn new() -> Player {
         Player {
             player_instance: Mutex::new(None),
         }
@@ -26,14 +29,16 @@ impl Player {
 impl Player {
     fn play(&self) -> Result<(), std::io::Error> {
         let player = &mut *self.player_instance.lock().unwrap();
-        if player.is_none() {
-            let spawn_result = Command::new("cvlc")
-                .arg("https://n-22-14.dcs.redcdn.pl/sc/o2/Eurozet/live/chillizet.livx")
-                .spawn()?;
-            *player = Some(spawn_result);
-            return Ok(());
+        match player {
+            Some(_) => Ok(()),
+            None => {
+                let spawn_result = Command::new("cvlc")
+                    .arg("https://n-22-14.dcs.redcdn.pl/sc/o2/Eurozet/live/chillizet.livx")
+                    .spawn()?;
+                *player = Some(spawn_result);
+                Ok(())
+            }
         }
-        Ok(())
     }
 }
 
@@ -51,9 +56,50 @@ impl Player {
     }
 }
 
+fn get_current_volume() -> Result<i32, Box<dyn std::error::Error >> {
+    let output = String::from_utf8(
+        Command::new("amixer")
+            .args(["-c", "2", "sget", "'PCM',0"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    let re = Regex::new(r"\[(?<percent>\d+)%\]").unwrap();
+    let caps = re.captures(&*output).unwrap();
+    let percent = &caps["percent"];
+    let result :i32 = percent.parse()?;
+
+    println!("Current volume: {}", result);
+    return Ok(result);
+}
+
+fn set_current_volume(vol : i32) -> Result<(), std::io::Error> {
+    let vol_percent  = vol.to_string() + "%";
+
+        Command::new("amixer")
+            .args(["-c", "2", "sset", "'PCM',0", &*vol_percent]).status()
+        .unwrap();
+    Ok(())
+}
+
+fn change_volume(command : &str) ->Result<(), std::io::Error> {
+    let vol_diff : i32 =command.parse().unwrap_or(0).clamp(-100, 100);
+    let vol = get_current_volume().unwrap() + vol_diff;
+    set_current_volume(vol.clamp(0, 100))
+}
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Name of the person to greet
+    #[arg(short, long, default_value_t = ("0.0.0.0:80".to_string()))]
+    socket_addr: String
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    let addr : SocketAddr = Args::parse().socket_addr.parse()?;
 
     // We create a TcpListener and bind it to 127.0.0.1:3000
     let listener = TcpListener::bind(addr).await?;
@@ -87,6 +133,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 }
 
+fn report_internal_server_error(error: Error) -> Response<Full<Bytes>> {
+    let mut server_error = Response::new(Full::new(error.to_string().into()));
+    *server_error.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+    server_error
+}
+
 async fn hello(
     request: Request<hyper::body::Incoming>,
     player: Arc<Player>,
@@ -100,27 +152,30 @@ async fn hello(
         <body>
         <h1><p><a href="/play">play</a></p></h1>
         <h1><p><a href="/pause">pause</a></p></h1>
+        <h3><p><a href="/volume?+10">louder!</a></p></h3>
+        <h3><p><a href="/volume?+1">louder</a></p></h3>
+        <h3><p><a href="/volume?-1">softer</a></p></h3>
+        <h3><p><a href="/volume?-10">softer!</a></p></h3>
         </body>
         </html>"#;
 
     let uri = request.uri().path();
     println!("Requested uri: \"{}\"", uri);
-    match request.uri().path() {
+    let uri = request.uri().path();
+    match uri {
         "/" => Ok(Response::new(Full::new(Bytes::from(html)))),
         "/play" => match player.play() {
             Ok(()) => std::prelude::rust_2015::Ok(Response::new(Full::new(Bytes::from(html)))),
-            Err(E) => {
-                let mut server_error = Response::new(Full::new(E.to_string().into()));
-                *server_error.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                Ok(server_error)
-            }
+            Err(err) => Ok(report_internal_server_error(err)),
         },
         "/pause" => match player.pause() {
             Ok(()) => std::prelude::rust_2015::Ok(Response::new(Full::new(Bytes::from(html)))),
-            Err(E) => {
-                let mut server_error = Response::new(Full::new(E.to_string().into()));
-                *server_error.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                Ok(server_error)
+            Err(err) => Ok(report_internal_server_error(err)),
+        },
+        "/volume" => {
+            match change_volume(request.uri().query().unwrap()) {
+                Ok(()) => Ok(Response::new(Full::new(Bytes::from(html)))),
+                Err(err) => Ok(report_internal_server_error(err)),
             }
         },
         _ => {
