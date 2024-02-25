@@ -21,7 +21,7 @@ impl VolumeControler {
         delta_percent: i32,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let _guard = self.lock.lock().unwrap();
-        let vol = get_current_volume()?;
+        let vol = get_current_volume().expect("Failed to get current volume");
         set_current_volume((vol + delta_percent).clamp(0, 100)).into()
     }
 }
@@ -29,7 +29,7 @@ impl VolumeControler {
 fn get_current_volume() -> Result<i32, Box<dyn std::error::Error>> {
     let output = String::from_utf8(
         Command::new("amixer")
-            .args(["-c", "2", "sget", "'PCM',0"])
+            .args(["sget", "'PCM',0"])
             .output()
             .unwrap()
             .stdout,
@@ -48,7 +48,7 @@ fn set_current_volume(vol: i32) -> Result<(), Box<dyn std::error::Error>> {
     let vol_percent = vol.to_string() + "%";
 
     match Command::new("amixer")
-        .args(["-c", "2", "sset", "'PCM',0", &*vol_percent])
+        .args(["sset", "'PCM',0", &*vol_percent])
         .status()
     {
         Ok(exit_status) => {
