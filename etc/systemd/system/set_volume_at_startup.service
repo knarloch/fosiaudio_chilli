@@ -1,0 +1,12 @@
+[Unit]
+Description=set volume at system startup, oneshot
+After=network.target sound.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/usr/bin/amixer sset 'PCM',0 60
+
+[Install]
+WantedBy=multi-user.target
