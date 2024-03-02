@@ -6,7 +6,7 @@ StartLimitIntervalSec=0
 [Service]
 Type=oneshot
 RemainAfterExit=no
-ExecStart=/usr/bin/amixer sset SoftMaster 60
+ExecStart=/usr/bin/amixer sset 'SoftMaster' '60%'
 
 [Install]
 WantedBy=multi-user.target
