@@ -29,7 +29,7 @@ impl VolumeControler {
 fn get_current_volume() -> Result<i32, Box<dyn std::error::Error>> {
     let output = String::from_utf8(
         Command::new("amixer")
-            .args(["sget", "'PCM',0"])
+            .args(["sget", "SoftMaster"])
             .output()
             .unwrap()
             .stdout,
@@ -48,7 +48,7 @@ fn set_current_volume(vol: i32) -> Result<(), Box<dyn std::error::Error>> {
     let vol_percent = vol.to_string() + "%";
 
     match Command::new("amixer")
-        .args(["sset", "'PCM',0", &*vol_percent])
+        .args(["sset", "SoftMaster", &*vol_percent])
         .status()
     {
         Ok(exit_status) => {
