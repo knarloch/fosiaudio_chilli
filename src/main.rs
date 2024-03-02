@@ -82,12 +82,12 @@ async fn hello(
         <title>fosiaudio_chilli</title>
         </head>
         <body>
-        <h1><p><a href="/play">play</a></p></h1>
-        <h1><p><a href="/pause">pause</a></p></h1>
-        <h3><p><a href="/volume_up?10">louder!</a></p></h3>
-        <h3><p><a href="/volume_up?1">louder</a></p></h3>
-        <h3><p><a href="/volume_down?1">softer</a></p></h3>
-        <h3><p><a href="/volume_down?10">softer!</a></p></h3>
+        <span style="font-size:8em;"><p><a href="/play">play</a></p></span>
+        <span style="font-size:8em;"><p><a href="/pause">pause</a></p></span>
+        <span style="font-size:4em;"><p><a href="/change_volume?10">louder!</a></p></span>
+        <span style="font-size:4em;"><p><a href="/change_volume?1">louder</a></p></span>
+        <span style="font-size:4em;"><p><a href="/change_volume?-1">softer</a></p></span>
+        <span style="font-size:4em;"><p><a href="/change_volume?-10">softer!</a></p></span>
         </body>
         </html>"#;
 
@@ -104,22 +104,11 @@ async fn hello(
             Ok(()) => std::prelude::rust_2015::Ok(Response::new(Full::new(Bytes::from(html)))),
             Err(err) => Ok(report_internal_server_error(err.into())),
         },
-        "/volume_up" => {
+        "/change_volume" => {
             let param = request.uri().query().unwrap_or("").parse::<i32>();
             match param {
                 Ok(vol_delta) =>
                     match volume_controler.change_volume(vol_delta) {
-                        Ok(_) => Ok(Response::new(Full::new(Bytes::from(html)))),
-                        Err(err) => Ok(report_internal_server_error(err)),
-                    },
-                Err(err) => Ok(report_internal_server_error(err.into()))
-            }
-        },
-        "/volume_down" => {
-            let param = request.uri().query().unwrap_or("").parse::<i32>();
-            match param {
-                Ok(vol_delta) =>
-                    match volume_controler.change_volume(-1*vol_delta) {
                         Ok(_) => Ok(Response::new(Full::new(Bytes::from(html)))),
                         Err(err) => Ok(report_internal_server_error(err)),
                 },
