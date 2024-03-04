@@ -21,7 +21,7 @@ impl Player {
             Some(_) => Ok(()),
             None => {
                 let spawn_result = Command::new("cvlc")
-                    .arg("https://n-22-14.dcs.redcdn.pl/sc/o2/Eurozet/live/chillizet.livx")
+                    .arg("http://n-22-14.dcs.redcdn.pl/sc/o2/Eurozet/live/chillizet.livx")
                     .spawn()?;
                 *player = Some(spawn_result);
                 Ok(())
@@ -36,6 +36,7 @@ impl Player {
         match player {
             Some(process) => {
                 process.kill()?;
+                let _ = process.wait();
                 *player = None;
                 Ok(())
             }
