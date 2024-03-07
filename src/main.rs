@@ -2,7 +2,8 @@ mod player;
 mod volume_controler;
 
 use clap::Parser;
-use http_body_util::Full;
+use http_body_util::combinators::BoxBody;
+use http_body_util::{BodyExt, Full, Empty};
 use hyper::body::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -10,7 +11,7 @@ use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use std::sync::{Arc};
+use std::sync::Arc;
 use tokio::net::TcpListener;
 
 use player::Player;
@@ -64,18 +65,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 }
 
-fn report_internal_server_error(error: Box<dyn std::error::Error>) -> Response<Full<Bytes>> {
-    let mut server_error = Response::new(Full::new(error.to_string().into()));
-    *server_error.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-    server_error
+fn report_internal_server_error(
+    error: Box<dyn std::error::Error>,
+) -> Response<BoxBody<Bytes, Infallible>> {
+    Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .body(Full::new(error.to_string().into()).boxed())
+        .unwrap()
 }
 
-async fn hello(
-    request: Request<hyper::body::Incoming>,
-    player: Arc<Player>,
-    volume_controler: Arc<VolumeControler>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
-    let html: &str = r#"<!DOCTYPE html>
+fn redirect_to_root() -> Response<BoxBody<Bytes, Infallible>> {
+    Response::builder()
+        .status(StatusCode::TEMPORARY_REDIRECT)
+        .header(http::header::LOCATION, "/")
+        .body(Empty::<Bytes>::new().boxed())
+        .unwrap()
+        .into()
+}
+
+fn respond_with_root() -> Response<BoxBody<Bytes, Infallible>> {
+    let html: &'static str = r#"<!DOCTYPE html>
         <html lang="en">
         <head>
         <meta charset="UTF-8">
@@ -91,34 +100,47 @@ async fn hello(
         </body>
         </html>"#;
 
+    Response::builder()
+        .status(StatusCode::OK)
+        .body(Full::new(Bytes::from_static(html.as_bytes())).boxed())
+        .unwrap()
+}
+
+fn respond_not_found() -> Response<BoxBody<Bytes, Infallible>> {
+
+    let mut response = Response::new(Empty::<Bytes>::new().boxed());
+    *response.status_mut() = StatusCode::NOT_FOUND;
+    return response.into();
+}
+
+async fn hello(
+    request: Request<hyper::body::Incoming>,
+    player: Arc<Player>,
+    volume_controler: Arc<VolumeControler>,
+) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
     let uri = request.uri().path();
     println!("Requested uri: \"{}\"", uri);
     let uri = request.uri().path();
     match uri {
-        "/" => Ok(Response::new(Full::new(Bytes::from(html)))),
+        "/" => Ok(respond_with_root()),
         "/play" => match player.play() {
-            Ok(()) => std::prelude::rust_2015::Ok(Response::new(Full::new(Bytes::from(html)))),
+            Ok(()) => Ok(redirect_to_root()),
             Err(err) => Ok(report_internal_server_error(err.into())),
         },
         "/pause" => match player.pause() {
-            Ok(()) => std::prelude::rust_2015::Ok(Response::new(Full::new(Bytes::from(html)))),
+            Ok(()) => Ok(redirect_to_root()),
             Err(err) => Ok(report_internal_server_error(err.into())),
         },
         "/change_volume" => {
             let param = request.uri().query().unwrap_or("").parse::<i32>();
             match param {
-                Ok(vol_delta) =>
-                    match volume_controler.change_volume(vol_delta) {
-                        Ok(_) => Ok(Response::new(Full::new(Bytes::from(html)))),
-                        Err(err) => Ok(report_internal_server_error(err)),
+                Ok(vol_delta) => match volume_controler.change_volume(vol_delta) {
+                    Ok(_) => Ok(redirect_to_root()),
+                    Err(err) => Ok(report_internal_server_error(err)),
                 },
-                    Err(err) => Ok(report_internal_server_error(err.into()))
-                }
-        },
-        _ => {
-            let mut not_found = Response::new(Full::new(Bytes::new()));
-            *not_found.status_mut() = StatusCode::NOT_FOUND;
-            Ok(not_found)
+                Err(err) => Ok(report_internal_server_error(err.into())),
+            }
         }
+        _ => Ok(respond_not_found()),
     }
 }

@@ -13,3 +13,4 @@ hyper-util = { version = "0.1", features = ["full"] }
 regex = "1.10.3"
 simple-error = "0.3.0"
 tokio = { version = "1", features = ["full"] }
+http = "1.0.0"

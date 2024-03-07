@@ -182,6 +182,7 @@ name = "fosiaudio_chilli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "http",
  "http-body-util",
  "hyper",
  "hyper-util",
