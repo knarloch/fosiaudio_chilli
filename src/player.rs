@@ -21,7 +21,7 @@ impl Player {
             Some(_) => Ok(()),
             None => {
                 let spawn_result = Command::new("cvlc")
-                    .arg("http://n-22-14.dcs.redcdn.pl/sc/o2/Eurozet/live/chillizet.livx")
+                    .arg("https://r.dcs.redcdn.pl/sc/o2/Eurozet/live/chillizet.livx")
                     .spawn()?;
                 *player = Some(spawn_result);
                 Ok(())
