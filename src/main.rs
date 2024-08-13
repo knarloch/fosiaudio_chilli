@@ -81,22 +81,7 @@ fn redirect_to_root() -> Response<BoxBody<Bytes, Infallible>> {
 }
 
 fn respond_with_root() -> Response<BoxBody<Bytes, Infallible>> {
-    let html: &'static str = r#"<!DOCTYPE html>
-        <html lang="en">
-        <head>
-        <meta charset="UTF-8">
-        <title>fosiaudio_chilli</title>
-        </head>
-        <body>
-        <span style="font-size:8em;"><p><a href="/play">play</a></p></span>
-        <span style="font-size:8em;"><p><a href="/pause">pause</a></p></span>
-        <span style="font-size:4em;"><p><a href="/change_volume?10">louder!</a></p></span>
-        <span style="font-size:4em;"><p><a href="/change_volume?1">louder</a></p></span>
-        <span style="font-size:4em;"><p><a href="/change_volume?-1">softer</a></p></span>
-        <span style="font-size:4em;"><p><a href="/change_volume?-10">softer!</a></p></span>
-        </body>
-        </html>"#;
-
+    let html: &'static str = include_str!("fosiaudio_chilli.html");
     Response::builder()
         .status(StatusCode::OK)
         .body(Full::new(Bytes::from_static(html.as_bytes())).boxed())
