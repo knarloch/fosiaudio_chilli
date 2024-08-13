@@ -105,7 +105,7 @@ async fn hello(
     let uri = request.uri().path();
     match uri {
         "/" => Ok(respond_with_root()),
-        "/play" => match player.play() {
+        "/play" => match player.play("https://r.dcs.redcdn.pl/sc/o2/Eurozet/live/chillizet.livx".into()) {
             Ok(()) => Ok(redirect_to_root()),
             Err(err) => Ok(report_internal_server_error(err.into())),
         },

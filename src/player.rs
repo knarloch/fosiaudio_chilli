@@ -1,29 +1,43 @@
 use std::process::{Child, Command};
 use std::sync::Mutex;
 
+enum PlayerState {
+    Paused {},
+    Playing {
+        content_url: String,
+        worker_process: Child,
+    },
+}
 
 pub struct Player {
-    player_instance: Mutex<Option<Child>>,
+    state: Mutex<PlayerState>,
 }
 
 impl Player {
     pub fn new() -> Player {
         Player {
-            player_instance: Mutex::new(None),
+            state: Mutex::new(PlayerState::Paused {}),
         }
     }
 }
 
 impl Player {
-    pub fn play(&self) -> Result<(), std::io::Error> {
-        let player = &mut *self.player_instance.lock().unwrap();
-        match player {
-            Some(_) => Ok(()),
-            None => {
-                let spawn_result = Command::new("cvlc")
-                    .arg("https://r.dcs.redcdn.pl/sc/o2/Eurozet/live/chillizet.livx")
+    pub fn play(&self, new_content_url: String) -> Result<(), std::io::Error> {
+        let state = &mut *self.state.lock().unwrap();
+        match state {
+            PlayerState::Playing { content_url, .. } => {
+                if *content_url == new_content_url {
+                    Ok(())
+                } else {
+                    self.pause()?;
+                    self.play(new_content_url)
+                }
+            }
+            PlayerState::Paused {} => {
+                let spawn_result = Command::new("mpv")
+                    .arg(new_content_url.clone())
                     .spawn()?;
-                *player = Some(spawn_result);
+                *state = PlayerState::Playing { content_url: new_content_url, worker_process: spawn_result };
                 Ok(())
             }
         }
@@ -32,15 +46,15 @@ impl Player {
 
 impl Player {
     pub fn pause(&self) -> Result<(), std::io::Error> {
-        let player = &mut *self.player_instance.lock().unwrap();
-        match player {
-            Some(process) => {
-                process.kill()?;
-                let _ = process.wait();
-                *player = None;
+        let state = &mut *self.state.lock().unwrap();
+        match state {
+            PlayerState::Playing{ worker_process, ..} => {
+                worker_process.kill()?;
+                let _ = worker_process.wait();
+                *state = PlayerState::Paused {};
                 Ok(())
             }
-            None => Ok(()),
+            PlayerState::Paused {} => Ok(()),
         }
     }
 }
