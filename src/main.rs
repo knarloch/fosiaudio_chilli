@@ -20,8 +20,7 @@ use volume_controler::VolumeControler;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Name of the person to greet
-    #[arg(short, long, default_value_t = ("0.0.0.0:80".to_string()))]
+    #[arg(short, long, default_value = "0.0.0.0:80")]
     socket_addr: String,
 }
 
@@ -29,10 +28,8 @@ struct Args {
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr: SocketAddr = Args::parse().socket_addr.parse()?;
 
-    // We create a TcpListener and bind it to 127.0.0.1:3000
     let listener = TcpListener::bind(addr).await?;
 
-    // We start a loop to continuously accept incoming connections
     let player = Arc::new(Player::new());
     let volume_controler = Arc::new(VolumeControler::new());
 
