@@ -2,6 +2,7 @@ use regex::Regex;
 use simple_error::bail;
 use std::process::Command;
 use std::sync::Mutex;
+use anyhow::anyhow;
 
 pub struct VolumeControler {
     lock: Mutex<()>,
@@ -19,14 +20,14 @@ impl VolumeControler {
     pub fn change_volume(
         self: &VolumeControler,
         delta_percent: i32,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), anyhow::Error> {
         let _guard = self.lock.lock().unwrap();
         let vol = get_current_volume().expect("Failed to get current volume");
         set_current_volume((vol + delta_percent).clamp(0, 100)).into()
     }
 }
 
-fn get_current_volume() -> Result<i32, Box<dyn std::error::Error>> {
+fn get_current_volume() -> Result<i32, anyhow::Error> {
     let output = String::from_utf8(
         Command::new("amixer")
             .args(["sget", "SoftMaster"])
@@ -44,7 +45,7 @@ fn get_current_volume() -> Result<i32, Box<dyn std::error::Error>> {
     return Ok(result);
 }
 
-fn set_current_volume(vol: i32) -> Result<(), Box<dyn std::error::Error>> {
+fn set_current_volume(vol: i32) -> Result<(), anyhow::Error> {
     let vol_percent = vol.to_string() + "%";
 
     match Command::new("amixer")
@@ -58,6 +59,6 @@ fn set_current_volume(vol: i32) -> Result<(), Box<dyn std::error::Error>> {
                 bail!("amixer exit status: {}", exit_status)
             }
         }
-        Err(err) => Err(err.into()),
+        Err(err) => Err(anyhow!(err)),
     }
 }

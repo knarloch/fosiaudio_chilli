@@ -1,20 +1,23 @@
 mod player;
 mod volume_controler;
 
+use anyhow::anyhow;
 use clap::Parser;
+use http::Method;
 use http_body_util::combinators::BoxBody;
-use http_body_util::{BodyExt, Full, Empty};
+use http_body_util::{BodyExt, Empty, Full};
 use hyper::body::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
+use player::Player;
 use std::convert::Infallible;
+use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-
-use player::Player;
+use url_encoded_data::UrlEncodedData;
 use volume_controler::VolumeControler;
 
 #[derive(Parser, Debug)]
@@ -62,22 +65,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 }
 
-fn report_internal_server_error(
-    error: Box<dyn std::error::Error>,
-) -> Response<BoxBody<Bytes, Infallible>> {
+fn report_internal_server_error(error: anyhow::Error) -> Response<BoxBody<Bytes, Infallible>> {
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .body(Full::new(error.to_string().into()).boxed())
+        .body(Full::new(format!("{:?}", error).into()).boxed())
         .unwrap()
-}
-
-fn redirect_to_root() -> Response<BoxBody<Bytes, Infallible>> {
-    Response::builder()
-        .status(StatusCode::TEMPORARY_REDIRECT)
-        .header(http::header::LOCATION, "/")
-        .body(Empty::<Bytes>::new().boxed())
-        .unwrap()
-        .into()
 }
 
 fn respond_with_root() -> Response<BoxBody<Bytes, Infallible>> {
@@ -89,10 +81,57 @@ fn respond_with_root() -> Response<BoxBody<Bytes, Infallible>> {
 }
 
 fn respond_not_found() -> Response<BoxBody<Bytes, Infallible>> {
-
     let mut response = Response::new(Empty::<Bytes>::new().boxed());
     *response.status_mut() = StatusCode::NOT_FOUND;
     return response.into();
+}
+
+async fn collect_request_body(
+    request: Request<hyper::body::Incoming>,
+) -> Result<Bytes, anyhow::Error> {
+    let bytes = request
+        .into_body()
+        .collect()
+        .await
+        .map_err(|e| anyhow!(e))?
+        .to_bytes();
+    Ok(bytes)
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum RequestBodyError {
+    #[error("Request body is empty. Expected: \"stream_url=<url>\"")]
+    EmptyBody,
+    #[error("Request body is not an utf8 string. Expected: \"stream_url=<url>\"")]
+    NotAnUtf8Body(#[from] std::string::FromUtf8Error),
+    #[error("Request body does not contain \"{0}\" name")]
+    NameNotFound(String),
+    #[error("Request body does not contain value for name \"{0}\"")]
+    NoUrl(String),
+}
+
+fn get_value_from_form_body(body: Bytes, name: &str) -> Result<String, anyhow::Error> {
+    let chunk = body
+        .utf8_chunks()
+        .next()
+        .ok_or(anyhow!(RequestBodyError::EmptyBody))
+        .and_then(|chunk| {
+            println!("chunk: {:?}", chunk);
+            Ok(chunk.valid())
+        })?;
+    match UrlEncodedData::parse_str(chunk)
+        .iter()
+        .find(|(k, _)| **k == name)
+    {
+        Some((_, v)) => {
+            if v.is_empty() {
+                Err(anyhow!(RequestBodyError::NoUrl(name.into())))
+            } else {
+                Ok(v.to_string())
+            }
+        }
+        None => Err(anyhow!(RequestBodyError::NameNotFound(name.into()))),
+    }
 }
 
 async fn hello(
@@ -100,29 +139,34 @@ async fn hello(
     player: Arc<Player>,
     volume_controler: Arc<VolumeControler>,
 ) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
-    let uri = request.uri().path();
-    println!("Requested uri: \"{}\"", uri);
-    let uri = request.uri().path();
-    match uri {
-        "/" => Ok(respond_with_root()),
-        "/play" => match player.play("https://r.dcs.redcdn.pl/sc/o2/Eurozet/live/chillizet.livx".into()) {
-            Ok(()) => Ok(redirect_to_root()),
-            Err(err) => Ok(report_internal_server_error(err.into())),
+    match (request.method(), request.uri().path()) {
+        (&Method::GET, "/") => Ok(respond_with_root()),
+        (&Method::POST, "/pause") => match player.pause() {
+            Ok(_) => Ok(respond_with_root()),
+            Err(err) => Ok(report_internal_server_error(anyhow!(err))),
         },
-        "/pause" => match player.pause() {
-            Ok(()) => Ok(redirect_to_root()),
-            Err(err) => Ok(report_internal_server_error(err.into())),
-        },
-        "/change_volume" => {
-            let param = request.uri().query().unwrap_or("").parse::<i32>();
-            match param {
-                Ok(vol_delta) => match volume_controler.change_volume(vol_delta) {
-                    Ok(_) => Ok(redirect_to_root()),
-                    Err(err) => Ok(report_internal_server_error(err)),
-                },
+        (&Method::POST, "/play") => {
+            match collect_request_body(request)
+                .await
+                .and_then(|b| get_value_from_form_body(b, "stream_url"))
+                .and_then(|url| player.play(url).map_err(|e| anyhow!(e)))
+            {
+                Ok(_) => Ok(respond_with_root()),
                 Err(err) => Ok(report_internal_server_error(err.into())),
             }
         }
+        (&Method::POST, "/change_volume") => {
+            match collect_request_body(request)
+                .await
+                .and_then(|b| get_value_from_form_body(b, "volume_delta"))
+                .and_then(|vol| vol.parse::<i32>().map_err(|e| anyhow!(e)))
+                .and_then(|vol| volume_controler.change_volume(vol))
+            {
+                Ok(_) => Ok(respond_with_root()),
+                Err(err) => Ok(report_internal_server_error(err.into())),
+            }
+        }
+
         _ => Ok(respond_not_found()),
     }
 }
