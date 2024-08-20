@@ -1,5 +1,5 @@
 mod player;
-mod volume_controler;
+mod volume_controller;
 
 use anyhow::anyhow;
 use clap::Parser;
@@ -11,6 +11,7 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
+use log::*;
 use player::Player;
 use std::convert::Infallible;
 use std::fmt::Debug;
@@ -18,7 +19,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use url_encoded_data::UrlEncodedData;
-use volume_controler::VolumeControler;
+use volume_controller::VolumeController;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -29,12 +30,18 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    stderrlog::new()
+        .module(module_path!())
+        .verbosity(log::Level::Info)
+        .init()
+        .unwrap();
+
     let addr: SocketAddr = Args::parse().socket_addr.parse()?;
 
     let listener = TcpListener::bind(addr).await?;
 
     let player = Arc::new(Player::new());
-    let volume_controler = Arc::new(VolumeControler::new());
+    let volume_controler = Arc::new(VolumeController::new());
 
     loop {
         let (stream, _) = listener.accept().await?;
@@ -59,13 +66,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 )
                 .await
             {
-                println!("Error serving connection: {:?}", err);
+                error!("Error serving connection: {:?}", err);
             }
         });
     }
 }
 
-fn report_internal_server_error(error: anyhow::Error) -> Response<BoxBody<Bytes, Infallible>> {
+fn report_internal_server_error<E>(error: E) -> Response<BoxBody<Bytes, Infallible>>
+where
+    E: std::error::Error,
+{
+    error!("{error:?}");
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(Full::new(format!("{:?}", error).into()).boxed())
@@ -115,10 +126,7 @@ fn get_value_from_form_body(body: Bytes, name: &str) -> Result<String, anyhow::E
         .utf8_chunks()
         .next()
         .ok_or(anyhow!(RequestBodyError::EmptyBody))
-        .and_then(|chunk| {
-            println!("chunk: {:?}", chunk);
-            Ok(chunk.valid())
-        })?;
+        .and_then(|chunk| Ok(chunk.valid()))?;
     match UrlEncodedData::parse_str(chunk)
         .iter()
         .find(|(k, _)| **k == name)
@@ -137,13 +145,13 @@ fn get_value_from_form_body(body: Bytes, name: &str) -> Result<String, anyhow::E
 async fn hello(
     request: Request<hyper::body::Incoming>,
     player: Arc<Player>,
-    volume_controler: Arc<VolumeControler>,
+    volume_controler: Arc<VolumeController>,
 ) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
     match (request.method(), request.uri().path()) {
         (&Method::GET, "/") => Ok(respond_with_root()),
         (&Method::POST, "/pause") => match player.pause() {
             Ok(_) => Ok(respond_with_root()),
-            Err(err) => Ok(report_internal_server_error(anyhow!(err))),
+            Err(err) => Ok(report_internal_server_error(err)),
         },
         (&Method::POST, "/play") => {
             match collect_request_body(request)
@@ -152,18 +160,25 @@ async fn hello(
                 .and_then(|url| player.play(url).map_err(|e| anyhow!(e)))
             {
                 Ok(_) => Ok(respond_with_root()),
-                Err(err) => Ok(report_internal_server_error(err.into())),
+                Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
+                    err.as_ref(),
+                )),
             }
         }
         (&Method::POST, "/change_volume") => {
             match collect_request_body(request)
                 .await
                 .and_then(|b| get_value_from_form_body(b, "volume_delta"))
-                .and_then(|vol| vol.parse::<i32>().map_err(|e| anyhow!(e)))
+                .and_then(|vol| {
+                    vol.parse::<i32>()
+                        .map_err(|e| anyhow!(e).context("Parse volume_delta as int"))
+                })
                 .and_then(|vol| volume_controler.change_volume(vol))
             {
                 Ok(_) => Ok(respond_with_root()),
-                Err(err) => Ok(report_internal_server_error(err.into())),
+                Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
+                    err.as_ref(),
+                )),
             }
         }
 
