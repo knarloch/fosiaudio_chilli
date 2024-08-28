@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let listener = TcpListener::bind(addr).await?;
 
     let player = Arc::new(Player::new());
-    let volume_controler = Arc::new(VolumeController::new());
+    let volume_controller = Arc::new(VolumeController::new());
 
     loop {
         let (stream, _) = listener.accept().await?;
@@ -51,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let io = TokioIo::new(stream);
 
         let player = player.clone();
-        let volume_controler = volume_controler.clone();
+        let volume_controller = volume_controller.clone();
 
         // Spawn a tokio task to serve multiple connections concurrently
         tokio::task::spawn(async {
@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .serve_connection(
                     io,
                     service_fn(move |request| {
-                        hello(request, player.clone(), volume_controler.clone())
+                        hello(request, player.clone(), volume_controller.clone())
                     }),
                 )
                 .await
@@ -145,7 +145,7 @@ fn get_value_from_form_body(body: Bytes, name: &str) -> Result<String, anyhow::E
 async fn hello(
     request: Request<hyper::body::Incoming>,
     player: Arc<Player>,
-    volume_controler: Arc<VolumeController>,
+    volume_controller: Arc<VolumeController>,
 ) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
     match (request.method(), request.uri().path()) {
         (&Method::GET, "/") => Ok(respond_with_root()),
@@ -173,7 +173,7 @@ async fn hello(
                     vol.parse::<i32>()
                         .map_err(|e| anyhow!(e).context("Parse volume_delta as int"))
                 })
-                .and_then(|vol| volume_controler.change_volume(vol))
+                .and_then(|vol| volume_controller.change_volume(vol))
             {
                 Ok(_) => Ok(respond_with_root()),
                 Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
