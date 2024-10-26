@@ -26,7 +26,7 @@ impl PlayerState {
             }
             PlayerState::Paused {} => {
                 info!("Start playing {}", new_content_url);
-                let spawn_result = Command::new("mpv").arg(new_content_url.clone()).spawn()?;
+                let spawn_result = Command::new("ffplay").arg("-nodisp").arg(new_content_url.clone()).spawn()?;
                 *self = PlayerState::Playing {
                     content_url: new_content_url,
                     worker_process: spawn_result,
