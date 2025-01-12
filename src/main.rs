@@ -24,6 +24,8 @@ struct Args {
     socket_addr: String,
     #[arg(short, long, default_value = "/opt/autogrzybke")]
     autogrzybke_resource_path: String,
+    #[arg(short, long, default_value = "ffplay")]
+    ffplay_path: String,
 }
 
 #[tokio::main]
@@ -38,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let listener = TcpListener::bind(addr).await?;
 
-    let player = Arc::new(Player::new());
+    let player = Arc::new(Player::new(Args::parse().ffplay_path.as_str()));
     let volume_controller = Arc::new(VolumeController::new());
     let autogrzybke = Arc::new(Autogrzybke::new(
         Args::parse().autogrzybke_resource_path.as_str(),

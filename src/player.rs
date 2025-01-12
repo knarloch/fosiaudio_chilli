@@ -20,8 +20,8 @@ struct PlaybackCommand {
 }
 
 impl PlaybackCommand {
-    pub fn from_url(url: String) -> Self {
-        let mut command = Command::new("ffplay");
+    pub fn from_url(ffplay_path: &str, url: String) -> Self {
+        let mut command = Command::new(ffplay_path);
         command
             .arg("-autoexit")
             .arg("-nodisp")
@@ -35,13 +35,13 @@ impl PlaybackCommand {
         }
     }
 
-    pub fn from_files(playlist: Vec<String>) -> Result<Self, std::io::Error> {
+    pub fn from_files(ffplay_path: &str, playlist: Vec<String>) -> Result<Self, std::io::Error> {
         let mut playlist_file = tempfile::NamedTempFile::new()?;
         for file in &playlist {
             writeln!(playlist_file, "file {}", file)?;
         }
         playlist_file.flush()?;
-        let mut command = Command::new("ffplay");
+        let mut command = Command::new(ffplay_path);
         command
             .arg("-autoexit")
             .arg("-nodisp")
@@ -115,12 +115,14 @@ impl PlayerState {
 
 pub struct Player {
     state: Mutex<PlayerState>,
+    ffplay_path: String,
 }
 
 impl Player {
-    pub fn new() -> Player {
+    pub fn new(ffplay_path: &str) -> Player {
         Player {
             state: Mutex::new(PlayerState::Paused {}),
+            ffplay_path: ffplay_path.to_string(),
         }
     }
 }
@@ -130,14 +132,14 @@ impl Player {
         self.state
             .lock()
             .unwrap()
-            .play(PlaybackCommand::from_url(new_content_url))
+            .play(PlaybackCommand::from_url(self.ffplay_path.as_str(), new_content_url))
     }
 
     pub fn play_local_playlist(&self, playlist: Vec<String>) -> Result<(), std::io::Error> {
         self.state
             .lock()
             .unwrap()
-            .play(PlaybackCommand::from_files(playlist)?)
+            .play(PlaybackCommand::from_files(self.ffplay_path.as_str(), playlist)?)
     }
 
     pub fn pause(&self) -> Result<(), std::io::Error> {
