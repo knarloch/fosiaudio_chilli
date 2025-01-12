@@ -1,6 +1,7 @@
 mod http_request_handler;
 mod player;
 mod volume_controller;
+mod autogrzybke;
 
 
 use clap::Parser;
@@ -13,14 +14,16 @@ use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use volume_controller::VolumeController;
-
+use crate::volume_controller::VolumeController;
+use crate::autogrzybke::Autogrzybke;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(short, long, default_value = "0.0.0.0:80")]
     socket_addr: String,
+    #[arg(short, long, default_value = "/opt/autogrzybke")]
+    autogrzybke_resource_path: String,
 }
 
 #[tokio::main]
@@ -37,6 +40,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let player = Arc::new(Player::new());
     let volume_controller = Arc::new(VolumeController::new());
+    let autogrzybke = Arc::new(Autogrzybke::new(
+        Args::parse().autogrzybke_resource_path.as_str(),
+        1
+    ));
 
     loop {
         let (stream, _) = listener.accept().await?;
@@ -47,6 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
         let player = player.clone();
         let volume_controller = volume_controller.clone();
+        let autogrzybke = autogrzybke.clone();
 
         // Spawn a tokio task to serve multiple connections concurrently
         tokio::task::spawn(async {
@@ -56,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .serve_connection(
                     io,
                     service_fn(move |request| {
-                        http_request_handler::handle_request(request, player.clone(), volume_controller.clone())
+                        http_request_handler::handle_request(request, player.clone(), volume_controller.clone(), autogrzybke.clone())
                     }),
                 )
                 .await
