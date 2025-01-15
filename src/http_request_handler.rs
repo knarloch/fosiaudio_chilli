@@ -53,7 +53,7 @@ pub async fn handle_request(
                 )),
             }
         }
-        (&Method::GET, "/autogrzybke") => Ok(respond_with_autogrzybke()),
+        (&Method::GET, "/autogrzybke") => Ok(respond_with_autogrzybke(autogrzybke.get_last_missing())),
         (&Method::POST, "/autogrzybke") => {
             match collect_request_body(request)
                 .await
@@ -84,20 +84,21 @@ where
         .unwrap()
 }
 
-fn respond_with_html(html: &'static str) -> Response<BoxBody<Bytes, Infallible>> {
+fn respond_with_html(html: String) -> Response<BoxBody<Bytes, Infallible>> {
     Response::builder()
         .status(StatusCode::OK)
-        .body(Full::new(Bytes::from_static(html.as_bytes())).boxed())
+        .body(Full::new(Bytes::from(html)).boxed())
         .unwrap()
 }
 
 fn respond_with_root() -> Response<BoxBody<Bytes, Infallible>> {
-    let html: &'static str = include_str!("fosiaudio_chilli.html");
+    let html = include_str!("fosiaudio_chilli.html").to_string();
     respond_with_html(html)
 }
 
-fn respond_with_autogrzybke() -> Response<BoxBody<Bytes, Infallible>> {
-    let html: &'static str = include_str!("autogrzybke.html");
+fn respond_with_autogrzybke(missing :Vec<String>) -> Response<BoxBody<Bytes, Infallible>> {
+    let html = include_str!("autogrzybke.html").to_string();
+    let html = html.replace("LAST_MISSING", missing.join("\n").as_str());
     respond_with_html(html)
 }
 

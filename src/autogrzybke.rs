@@ -1,4 +1,4 @@
-use anyhow::{Context};
+use anyhow::Context;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use std::fs::read_to_string;
@@ -13,6 +13,7 @@ struct AutogrzybkeImpl {
     resources_variant_count: u64,
     recent_usage_time_window: Duration,
     recent_usage_timestamps: Vec<SystemTime>,
+    last_missing_list: Vec<String>,
 }
 impl AutogrzybkeImpl {
     fn parse_resources_variant_count_from_path(path: &str) -> Result<u64, anyhow::Error> {
@@ -39,6 +40,7 @@ impl AutogrzybkeImpl {
                 .unwrap(),
             recent_usage_time_window: Duration::from_secs(60 * 15),
             recent_usage_timestamps: Vec::new(),
+            last_missing_list: Vec::new(),
         }
     }
 
@@ -60,6 +62,7 @@ impl AutogrzybkeImpl {
 
     fn generate_ready_playlist(&mut self) -> Vec<String> {
         self.recent_usage_timestamps.clear();
+        self.last_missing_list.clear();
         let mut rng = rand::rng();
         ["silence", "everyone", "ready"]
             .iter()
@@ -74,6 +77,8 @@ impl AutogrzybkeImpl {
     }
 
     fn generate_waiting_playlist(&mut self, mut missing: Vec<String>) -> Vec<String> {
+        self.last_missing_list = missing.clone();
+        self.last_missing_list.sort_unstable();
         let mut rng = rand::rng();
         missing.extend(
             iter::repeat("kurwa".to_string())
@@ -93,6 +98,10 @@ impl AutogrzybkeImpl {
             })
             .collect()
     }
+
+    fn get_last_missing(&self) -> Vec<String> {
+        self.last_missing_list.clone()
+    }
 }
 
 pub struct Autogrzybke {
@@ -109,5 +118,9 @@ impl Autogrzybke {
             .lock()
             .unwrap()
             .generate_playlist(missing)
+    }
+
+    pub fn get_last_missing(&self) -> Vec<String> {
+        self.autogrzybke_impl.lock().unwrap().get_last_missing()
     }
 }
