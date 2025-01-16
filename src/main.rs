@@ -22,7 +22,7 @@ struct Args {
     #[arg(short, long, default_value = "0.0.0.0:80")]
     socket_addr: String,
     #[arg(short, long, default_value = "/opt/autogrzybke_resources")]
-    autogrzybke_resources_abspath: String,
+    autogrzybke_resources_path: String,
     #[arg(short, long, default_value = "ffplay")]
     ffplay_path: String,
 }
@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let player = Arc::new(Player::new(Args::parse().ffplay_path.as_str()));
     let volume_controller = Arc::new(VolumeController::new());
     let autogrzybke = Arc::new(Autogrzybke::new(
-        Args::parse().autogrzybke_resources_abspath.as_str(),
+        Args::parse().autogrzybke_resources_path.as_str(),
     ));
 
     loop {

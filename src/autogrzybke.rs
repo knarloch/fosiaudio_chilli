@@ -2,11 +2,11 @@ use anyhow::Context;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use std::fs::read_to_string;
-use std::iter;
 use std::ops::Add;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
+use std::iter;
 
 struct AutogrzybkeImpl {
     resources_path: String,
@@ -35,7 +35,15 @@ impl AutogrzybkeImpl {
 
     fn new(resources_path: &str) -> Self {
         AutogrzybkeImpl {
-            resources_path: resources_path.to_string(),
+            resources_path: std::fs::canonicalize(resources_path)
+                .context(format!(
+                    "Failed to use {resources_path} as autogrzybke resources path"
+                ))
+                .unwrap()
+                .as_os_str()
+                .to_str()
+                .unwrap()
+                .to_string(),
             resources_variant_count: Self::parse_resources_variant_count_from_path(resources_path)
                 .unwrap(),
             recent_usage_time_window: Duration::from_secs(60 * 15),
