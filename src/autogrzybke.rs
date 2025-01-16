@@ -1,7 +1,7 @@
 use anyhow::Context;
 use rand::seq::SliceRandom;
 use rand::Rng;
-use std::fs::read_to_string;
+use std::fs::{canonicalize, read_to_string};
 use std::iter;
 use std::ops::Add;
 use std::path::Path;
@@ -98,12 +98,20 @@ impl AutogrzybkeImpl {
         missing
             .iter()
             .map(|nickname| {
-                format!(
+                let mut filepath = format!(
                     "{0}/{nickname}{1}.mp3",
                     self.resources_path,
                     rng.random::<u64>() % (self.resources_variant_count) + 1
                 )
-                .to_ascii_lowercase()
+                .to_ascii_lowercase();
+                while canonicalize(filepath.clone()).is_err() {
+                    filepath = format!(
+                        "{0}/unknown{1}.mp3",
+                        self.resources_path,
+                        rng.random::<u64>() % (self.resources_variant_count) + 1
+                    )
+                }
+                filepath
             })
             .collect()
     }
