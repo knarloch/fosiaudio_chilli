@@ -2,11 +2,11 @@ use anyhow::Context;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use std::fs::read_to_string;
+use std::iter;
 use std::ops::Add;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
-use std::iter;
 
 struct AutogrzybkeImpl {
     resources_path: String,
@@ -80,6 +80,7 @@ impl AutogrzybkeImpl {
                     self.resources_path,
                     rng.random::<u64>() % (self.resources_variant_count) + 1
                 )
+                .to_ascii_lowercase()
             })
             .collect()
     }
@@ -102,6 +103,7 @@ impl AutogrzybkeImpl {
                     self.resources_path,
                     rng.random::<u64>() % (self.resources_variant_count) + 1
                 )
+                .to_ascii_lowercase()
             })
             .collect()
     }
