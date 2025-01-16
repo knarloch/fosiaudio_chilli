@@ -72,7 +72,7 @@ impl AutogrzybkeImpl {
         self.recent_usage_timestamps.clear();
         self.last_missing_list.clear();
         let mut rng = rand::rng();
-        ["silence", "everyone", "ready"]
+        ["everyone", "ready"]
             .iter()
             .map(|sample| {
                 format!(
@@ -93,7 +93,6 @@ impl AutogrzybkeImpl {
                 .take(0.max((self.get_usage_count() - 1) / 2 - 1) as usize),
         );
         missing.shuffle(&mut rng);
-        missing.insert(0, "silence".to_string());
         missing.push("lobby".to_string());
         missing
             .iter()
