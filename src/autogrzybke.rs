@@ -2,9 +2,9 @@ use anyhow::Context;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use std::fs::{canonicalize, read_to_string};
-use std::iter;
+use std::{fs, iter};
 use std::ops::Add;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
@@ -119,6 +119,32 @@ impl AutogrzybkeImpl {
     fn get_last_missing(&self) -> Vec<String> {
         self.last_missing_list.clone()
     }
+    fn list_resources(&self) -> Vec<String> {
+        let mut list: Vec<PathBuf> = Vec::new();
+
+        match list_files_recursive(Path::new(&self.resources_path),  &mut list) {
+            Ok(()) =>{
+                list.sort();
+                list.iter().map(|name| name.to_str().unwrap().to_string()).filter(|name| name.ends_with(".mp3")).collect()
+            }
+            Err(e) => vec![e.to_string()],
+        }
+    }
+}
+
+fn list_files_recursive(dir: &Path, list: &mut Vec<PathBuf>) -> Result<(), anyhow::Error> {
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir).context(format!("Failed to read_dir {dir:?}"))? {
+            let entry = entry.context(format!("Failed to get entry from {dir:?}"))?;
+            let path = entry.path();
+            if path.is_dir() {
+                list_files_recursive(&path, list)?;
+            } else {
+               list.push(path);
+            }
+        }
+    }
+    Ok(())
 }
 
 pub struct Autogrzybke {
@@ -139,5 +165,9 @@ impl Autogrzybke {
 
     pub fn get_last_missing(&self) -> Vec<String> {
         self.autogrzybke_impl.lock().unwrap().get_last_missing()
+    }
+
+    pub fn list_resources(&self) -> Vec<String> {
+        self.autogrzybke_impl.lock().unwrap().list_resources()
     }
 }

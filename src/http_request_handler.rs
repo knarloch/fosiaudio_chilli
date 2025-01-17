@@ -19,7 +19,7 @@ pub async fn handle_request(
     match (request.method(), request.uri().path()) {
         (&Method::GET, "/") => Ok(respond_with_root()),
         (&Method::POST, "/pause") => match player.pause() {
-            Ok(_) => Ok(respond_with_root()),
+            Ok(_) => Ok(respond_ok()),
             Err(err) => Ok(report_internal_server_error(err)),
         },
         (&Method::POST, "/play") => {
@@ -28,12 +28,27 @@ pub async fn handle_request(
                 .and_then(|b| get_value_from_form_body(b, "stream_url"))
                 .and_then(|url| player.play(url).map_err(|e| anyhow!(e)))
             {
-                Ok(_) => Ok(respond_with_root()),
+                Ok(_) => Ok(respond_ok()),
                 Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
                     err.as_ref(),
                 )),
             }
         }
+        (&Method::POST, "/playserverfiles") => {
+            match collect_request_body(request)
+                .await
+                .and_then(|b| get_value_from_form_body(b, "playlist"))
+                .and_then(|s| Ok(s.trim().to_string()))
+                .and_then(|missing| Ok(missing.split("\r\n").map(|slice| slice.into()).collect()))
+                .and_then(|playlist| player.play_local_playlist(playlist).map_err(|e| anyhow!(e)))
+            {
+                Ok(_) => Ok(respond_ok()),
+                Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
+                    err.as_ref(),
+                )),
+            }
+        }
+        (&Method::GET, "/listserverfiles") => Ok(respond_with_html(autogrzybke.list_resources().join("\n"))),
         (&Method::POST, "/change_volume") => {
             match collect_request_body(request)
                 .await
@@ -68,6 +83,8 @@ pub async fn handle_request(
                 )),
             }
         }
+        (&Method::GET, "/jukebox") => Ok(respond_with_jukebox()),
+
 
         _ => Ok(respond_not_found()),
     }
@@ -99,6 +116,11 @@ fn respond_with_root() -> Response<BoxBody<Bytes, Infallible>> {
 fn respond_with_autogrzybke(missing :Vec<String>) -> Response<BoxBody<Bytes, Infallible>> {
     let html = include_str!("autogrzybke.html").to_string();
     let html = html.replace("LAST_MISSING", missing.join("\n").as_str());
+    respond_with_html(html)
+}
+
+fn respond_with_jukebox() -> Response<BoxBody<Bytes, Infallible>> {
+    let html = include_str!("jukebox.html").to_string();
     respond_with_html(html)
 }
 

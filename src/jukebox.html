@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>jukebox</title>
+</head>
+<body>
+<h1>Jukebox</h1>
+
+<form action="/pause" method="post">
+    <button>Off</button>
+</form>
+
+<br><br>
+
+<h2>Play URL</h2>
+<p>For playling server files use playlist option below.<p>
+<form action="/play" method="post">
+    <input type="text" id="stream_url" size="64" name="stream_url">
+    <input type="submit" value="Play URL">
+</form>
+
+<br><br>
+
+<h2>Play server files</h2>
+<p><a>Show available files</a><p>
+<form action="/playserverfiles" method="post">
+    <textarea name="playlist" cols="64" rows="20" ></textarea><br>
+    <input type="submit" value="Play playlist">
+</form>
+
+<br><br>
+<h2><a href="autogrzybke">autogrzybke</a></h2>
