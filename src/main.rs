@@ -25,9 +25,9 @@ struct Args {
     autogrzybke_resources_path: String,
     #[arg(short, long, default_value = "ffplay")]
     ffplay_path: String,
-    #[arg(long, default_value = "20")]
+    #[arg(long, default_value = "33")]
     prefix_chance_percent: u64,
-    #[arg(long, default_value = "20")]
+    #[arg(long, default_value = "33")]
     suffix_chance_percent: u64
 }
 
