@@ -25,6 +25,10 @@ struct Args {
     autogrzybke_resources_path: String,
     #[arg(short, long, default_value = "ffplay")]
     ffplay_path: String,
+    #[arg(long, default_value = "20")]
+    prefix_chance_percent: u64,
+    #[arg(long, default_value = "20")]
+    suffix_chance_percent: u64
 }
 
 #[tokio::main]
@@ -43,6 +47,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let volume_controller = Arc::new(VolumeController::new());
     let autogrzybke = Arc::new(Autogrzybke::new(
         Args::parse().autogrzybke_resources_path.as_str(),
+        Args::parse().prefix_chance_percent,
+        Args::parse().suffix_chance_percent,
     ));
 
     loop {
