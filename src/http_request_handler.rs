@@ -110,15 +110,12 @@ pub async fn handle_request(
                 )),
             }
         }
-        (&Method::POST, "/autohypys/reset") => {
-            match scheduler.reset_to_default_schedule()
-            {
-                Ok(_) => Ok(respond_ok()),
-                Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
-                    err.as_ref(),
-                )),
-            }
-        }
+        (&Method::POST, "/autohypys/reset") => match scheduler.reset_to_default_schedule() {
+            Ok(_) => Ok(respond_ok()),
+            Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
+                err.as_ref(),
+            )),
+        },
 
         _ => Ok(respond_not_found()),
     }

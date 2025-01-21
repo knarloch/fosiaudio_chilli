@@ -1,11 +1,13 @@
 mod autogrzybke;
 mod http_request_handler;
 mod player;
-mod volume_controller;
 mod schedule;
+mod volume_controller;
 
 use crate::autogrzybke::Autogrzybke;
+use crate::schedule::Scheduler;
 use crate::volume_controller::VolumeController;
+use anyhow::Context;
 use clap::Parser;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -15,9 +17,7 @@ use player::Player;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use anyhow::Context;
 use tokio::net::TcpListener;
-use crate::schedule::Scheduler;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -31,7 +31,7 @@ struct Args {
     #[arg(long, default_value = "33")]
     prefix_chance_percent: u64,
     #[arg(long, default_value = "33")]
-    suffix_chance_percent: u64
+    suffix_chance_percent: u64,
 }
 
 #[tokio::main]
@@ -54,7 +54,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Args::parse().suffix_chance_percent,
     ));
 
-    let scheduler = Arc::new(Scheduler::new(player.clone(), Args::parse().autogrzybke_resources_path.as_str()).context("creating scheduler").unwrap());
+    let scheduler = Arc::new(
+        Scheduler::new(
+            player.clone(),
+            Args::parse().autogrzybke_resources_path.as_str(),
+        )
+        .context("creating scheduler")
+        .unwrap(),
+    );
 
     loop {
         let (stream, _) = listener.accept().await?;
@@ -69,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let scheduler = scheduler.clone();
         let scheduler2 = scheduler.clone();
 
-        tokio::task::spawn(async move{
+        tokio::task::spawn(async move {
             scheduler2.run_schedule().await;
         });
 

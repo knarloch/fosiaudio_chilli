@@ -25,7 +25,7 @@ pub fn parse_resources_variant_count_from_path(path: &str) -> Result<u64, anyhow
     Ok(lines)
 }
 
-pub fn canoncialize_resources_path(resources_path: &str) -> String{
+pub fn canoncialize_resources_path(resources_path: &str) -> String {
     std::fs::canonicalize(resources_path)
         .context(format!(
             "Failed to use {resources_path} as autogrzybke resources path"
@@ -47,10 +47,7 @@ struct AutogrzybkeImpl {
     suffix_chance_percent: u64,
 }
 impl AutogrzybkeImpl {
-
-
-    fn new(resources_path: &str, prefix_chance_percent: u64,
-           suffix_chance_percent: u64) -> Self {
+    fn new(resources_path: &str, prefix_chance_percent: u64, suffix_chance_percent: u64) -> Self {
         AutogrzybkeImpl {
             resources_path: canoncialize_resources_path(resources_path),
             resources_variant_count: parse_resources_variant_count_from_path(resources_path)
@@ -184,11 +181,17 @@ pub struct Autogrzybke {
     autogrzybke_impl: Mutex<AutogrzybkeImpl>,
 }
 impl Autogrzybke {
-    pub fn new(resources_path: &str, prefix_chance_percent: u64,
-               suffix_chance_percent: u64) -> Self {
+    pub fn new(
+        resources_path: &str,
+        prefix_chance_percent: u64,
+        suffix_chance_percent: u64,
+    ) -> Self {
         Autogrzybke {
-            autogrzybke_impl: Mutex::new(AutogrzybkeImpl::new(resources_path, prefix_chance_percent,
-                                         suffix_chance_percent))
+            autogrzybke_impl: Mutex::new(AutogrzybkeImpl::new(
+                resources_path,
+                prefix_chance_percent,
+                suffix_chance_percent,
+            )),
         }
     }
     pub fn generate_playlist(&self, missing: Vec<String>) -> Vec<String> {

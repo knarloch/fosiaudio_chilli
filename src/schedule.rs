@@ -66,8 +66,8 @@ impl Scheduler {
     }
 
     pub fn reset_to_default_schedule(&self) -> Result<(), anyhow::Error> {
-        let schedule =
-            parse_and_filter_schedule(SCHEDULE_DEFAULT).context(format!("Reset to default schedule"))?;
+        let schedule = parse_and_filter_schedule(SCHEDULE_DEFAULT)
+            .context(format!("Reset to default schedule"))?;
         self.schedule_impl.lock().unwrap().schedule = schedule;
         Ok(())
     }

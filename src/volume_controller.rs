@@ -18,8 +18,10 @@ impl VolumeController {
 
 impl VolumeController {
     pub fn change_volume(self: &VolumeController, delta_percent: i32) -> Result<(), anyhow::Error> {
-        let _guard = self.lock.lock().or_else(|e|
-            Err(anyhow!("VolumeController mutex poisoned: {e:#?}")))?;
+        let _guard = self
+            .lock
+            .lock()
+            .or_else(|e| Err(anyhow!("VolumeController mutex poisoned: {e:#?}")))?;
         let vol = get_current_volume().context("Failed to get current volume")?;
         set_current_volume((vol + delta_percent).clamp(0, 100)).into()
     }

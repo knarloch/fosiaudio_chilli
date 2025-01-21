@@ -79,13 +79,17 @@ impl PlayerState {
             }
             PlayerState::Paused {} => {
                 info!("Restart raspotify.service to make sure audio card is available");
-                Command::new("sudo").arg("systemctl").arg("restart").arg("raspotify.service").spawn()?;
+                Command::new("sudo")
+                    .arg("systemctl")
+                    .arg("restart")
+                    .arg("raspotify.service")
+                    .spawn()?;
                 info!("Start playing {}", playback_command.description);
                 let spawn_result = playback_command.command.spawn()?;
                 *self = PlayerState::Playing {
                     description: playback_command.description,
                     worker_process: spawn_result,
-                    playlist_handle: playback_command.playlist_handle
+                    playlist_handle: playback_command.playlist_handle,
                 };
                 Ok(())
             }
@@ -129,17 +133,17 @@ impl Player {
 
 impl Player {
     pub fn play(&self, new_content_url: String) -> Result<(), std::io::Error> {
-        self.state
-            .lock()
-            .unwrap()
-            .play(PlaybackCommand::from_url(self.ffplay_path.as_str(), new_content_url))
+        self.state.lock().unwrap().play(PlaybackCommand::from_url(
+            self.ffplay_path.as_str(),
+            new_content_url,
+        ))
     }
 
     pub fn play_local_playlist(&self, playlist: Vec<String>) -> Result<(), std::io::Error> {
-        self.state
-            .lock()
-            .unwrap()
-            .play(PlaybackCommand::from_files(self.ffplay_path.as_str(), playlist)?)
+        self.state.lock().unwrap().play(PlaybackCommand::from_files(
+            self.ffplay_path.as_str(),
+            playlist,
+        )?)
     }
 
     pub fn pause(&self) -> Result<(), std::io::Error> {
