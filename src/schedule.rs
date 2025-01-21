@@ -24,7 +24,7 @@ fn parse_and_filter_schedule(text: &str) -> Result<Vec<DateTime<Local>>, anyhow:
     Ok(schedule)
 }
 
-const SCHEDULE_DEFAULT: &str = include_str!("schedule_default.yaml");
+pub const SCHEDULE_DEFAULT: &str = include_str!("schedule_default.yaml");
 impl SchedulerImpl {
     fn new(player: Arc<Player>, resources_path: &str) -> Result<Self, anyhow::Error> {
         Ok(SchedulerImpl {
@@ -61,13 +61,6 @@ impl Scheduler {
     pub fn set_schedule(&self, text: &str) -> Result<(), anyhow::Error> {
         let schedule =
             parse_and_filter_schedule(text).context(format!("Parse schedule from \"{text}\""))?;
-        self.schedule_impl.lock().unwrap().schedule = schedule;
-        Ok(())
-    }
-
-    pub fn reset_to_default_schedule(&self) -> Result<(), anyhow::Error> {
-        let schedule = parse_and_filter_schedule(SCHEDULE_DEFAULT)
-            .context(format!("Reset to default schedule"))?;
         self.schedule_impl.lock().unwrap().schedule = schedule;
         Ok(())
     }

@@ -1,8 +1,9 @@
 use crate::autogrzybke::Autogrzybke;
 use crate::player::Player;
+use crate::schedule;
 use crate::schedule::Scheduler;
 use crate::volume_controller::VolumeController;
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use http::{Method, Request, Response, StatusCode};
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::Bytes;
@@ -104,14 +105,17 @@ pub async fn handle_request(
                 .and_then(|b| get_value_from_form_body(b, "schedule"))
                 .and_then(|text| scheduler.set_schedule(text.as_str()))
             {
-                Ok(_) => Ok(respond_ok()),
+                Ok(_) => Ok(respond_with_schedule(scheduler.get_serialized_schedule())),
                 Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
                     err.as_ref(),
                 )),
             }
         }
-        (&Method::POST, "/autohypys/reset") => match scheduler.reset_to_default_schedule() {
-            Ok(_) => Ok(respond_ok()),
+        (&Method::POST, "/autohypys/reset") => match scheduler
+            .set_schedule(schedule::SCHEDULE_DEFAULT)
+            .context("Handle POST /autohypys/reset")
+        {
+            Ok(_) => Ok(respond_with_schedule(scheduler.get_serialized_schedule())),
             Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
                 err.as_ref(),
             )),
