@@ -1,9 +1,10 @@
-use anyhow::anyhow;
 use crate::autogrzybke::Autogrzybke;
 use crate::player::Player;
+use crate::schedule::Scheduler;
 use crate::volume_controller::VolumeController;
+use anyhow::anyhow;
 use http::{Method, Request, Response, StatusCode};
-use http_body_util::{BodyExt, combinators::BoxBody, Empty, Full};
+use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::Bytes;
 use log::error;
 use std::convert::Infallible;
@@ -15,6 +16,7 @@ pub async fn handle_request(
     player: Arc<Player>,
     volume_controller: Arc<VolumeController>,
     autogrzybke: Arc<Autogrzybke>,
+    scheduler: Arc<Scheduler>,
 ) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
     match (request.method(), request.uri().path()) {
         (&Method::GET, "/") => Ok(respond_with_root()),
@@ -48,13 +50,15 @@ pub async fn handle_request(
                 )),
             }
         }
-        (&Method::GET, "/listserverfiles") => Ok(respond_with_html(autogrzybke.list_resources().join("\n"))),
+        (&Method::GET, "/listserverfiles") => {
+            Ok(respond_with_html(autogrzybke.list_resources().join("\n")))
+        }
         (&Method::POST, "/change_volume") => {
             match collect_request_body(request)
                 .await
                 .and_then(|b| get_value_from_form_body(b, "volume_delta"))
                 .and_then(|vol| {
-                    if vol.is_empty(){
+                    if vol.is_empty() {
                         return Ok(0);
                     }
                     vol.parse::<i32>()
@@ -68,12 +72,19 @@ pub async fn handle_request(
                 )),
             }
         }
-        (&Method::GET, "/autogrzybke") => Ok(respond_with_autogrzybke(autogrzybke.get_last_missing())),
+        (&Method::GET, "/autogrzybke") => {
+            Ok(respond_with_autogrzybke(autogrzybke.get_last_missing()))
+        }
         (&Method::POST, "/autogrzybke") => {
             match collect_request_body(request)
                 .await
                 .and_then(|b| get_value_from_form_body(b, "missing"))
-                .and_then(|missing| Ok(missing.split_whitespace().map(|slice| slice.into()).collect()))
+                .and_then(|missing| {
+                    Ok(missing
+                        .split_whitespace()
+                        .map(|slice| slice.into())
+                        .collect())
+                })
                 .and_then(|missing| Ok(autogrzybke.generate_playlist(missing)))
                 .and_then(|playlist| player.play_local_playlist(playlist).map_err(|e| anyhow!(e)))
             {
@@ -84,7 +95,30 @@ pub async fn handle_request(
             }
         }
         (&Method::GET, "/jukebox") => Ok(respond_with_jukebox()),
-
+        (&Method::GET, "/autohypys") => {
+            Ok(respond_with_schedule(scheduler.get_serialized_schedule()))
+        }
+        (&Method::POST, "/autohypys") => {
+            match collect_request_body(request)
+                .await
+                .and_then(|b| get_value_from_form_body(b, "schedule"))
+                .and_then(|text| scheduler.set_schedule(text.as_str()))
+            {
+                Ok(_) => Ok(respond_ok()),
+                Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
+                    err.as_ref(),
+                )),
+            }
+        }
+        (&Method::POST, "/autohypys/reset") => {
+            match scheduler.reset_to_default_schedule()
+            {
+                Ok(_) => Ok(respond_ok()),
+                Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
+                    err.as_ref(),
+                )),
+            }
+        }
 
         _ => Ok(respond_not_found()),
     }
@@ -113,7 +147,7 @@ fn respond_with_root() -> Response<BoxBody<Bytes, Infallible>> {
     respond_with_html(html)
 }
 
-fn respond_with_autogrzybke(missing :Vec<String>) -> Response<BoxBody<Bytes, Infallible>> {
+fn respond_with_autogrzybke(missing: Vec<String>) -> Response<BoxBody<Bytes, Infallible>> {
     let html = include_str!("autogrzybke.html").to_string();
     let html = html.replace("LAST_MISSING", missing.join("\n").as_str());
     respond_with_html(html)
@@ -122,6 +156,19 @@ fn respond_with_autogrzybke(missing :Vec<String>) -> Response<BoxBody<Bytes, Inf
 fn respond_with_jukebox() -> Response<BoxBody<Bytes, Infallible>> {
     let html = include_str!("jukebox.html").to_string();
     respond_with_html(html)
+}
+
+fn respond_with_schedule(
+    schedule_text: Result<String, anyhow::Error>,
+) -> Response<BoxBody<Bytes, Infallible>> {
+    match schedule_text {
+        Ok(text) => {
+            let html = include_str!("autohypys.html").to_string();
+            let html = html.replace("SCHEDULE", text.as_str());
+            respond_with_html(html)
+        }
+        Err(e) => respond_with_html(format!("{e}")),
+    }
 }
 
 fn respond_ok() -> Response<BoxBody<Bytes, Infallible>> {
@@ -168,9 +215,7 @@ fn get_value_from_form_body(body: Bytes, name: &str) -> Result<String, anyhow::E
         .iter()
         .find(|(k, _)| **k == name)
     {
-        Some((_, v)) => {
-            Ok(v.to_string())
-        }
+        Some((_, v)) => Ok(v.to_string()),
         None => Err(anyhow!(RequestBodyError::NameNotFound(name.into()))),
     }
 }

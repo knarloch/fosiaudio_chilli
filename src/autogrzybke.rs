@@ -8,6 +8,35 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 use std::{fs, iter};
 
+pub fn parse_resources_variant_count_from_path(path: &str) -> Result<u64, anyhow::Error> {
+    let sample_sets_count_txt = Path::new(path).join("sample_sets_count.txt");
+    let sample_sets_count_txt = sample_sets_count_txt.as_path();
+    let lines: u64 = read_to_string(sample_sets_count_txt)
+        .context(format!(
+            "Failed to read {}",
+            sample_sets_count_txt.display()
+        ))?
+        .trim()
+        .parse()
+        .context(format!(
+            "Failed to parse u64 from {}",
+            sample_sets_count_txt.display()
+        ))?;
+    Ok(lines)
+}
+
+pub fn canoncialize_resources_path(resources_path: &str) -> String{
+    std::fs::canonicalize(resources_path)
+        .context(format!(
+            "Failed to use {resources_path} as autogrzybke resources path"
+        ))
+        .unwrap()
+        .as_os_str()
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
 struct AutogrzybkeImpl {
     resources_path: String,
     resources_variant_count: u64,
@@ -18,36 +47,13 @@ struct AutogrzybkeImpl {
     suffix_chance_percent: u64,
 }
 impl AutogrzybkeImpl {
-    fn parse_resources_variant_count_from_path(path: &str) -> Result<u64, anyhow::Error> {
-        let sample_sets_count_txt = Path::new(path).join("sample_sets_count.txt");
-        let sample_sets_count_txt = sample_sets_count_txt.as_path();
-        let lines: u64 = read_to_string(sample_sets_count_txt)
-            .context(format!(
-                "Failed to read {}",
-                sample_sets_count_txt.display()
-            ))?
-            .trim()
-            .parse()
-            .context(format!(
-                "Failed to parse u64 from {}",
-                sample_sets_count_txt.display()
-            ))?;
-        Ok(lines)
-    }
+
 
     fn new(resources_path: &str, prefix_chance_percent: u64,
            suffix_chance_percent: u64) -> Self {
         AutogrzybkeImpl {
-            resources_path: std::fs::canonicalize(resources_path)
-                .context(format!(
-                    "Failed to use {resources_path} as autogrzybke resources path"
-                ))
-                .unwrap()
-                .as_os_str()
-                .to_str()
-                .unwrap()
-                .to_string(),
-            resources_variant_count: Self::parse_resources_variant_count_from_path(resources_path)
+            resources_path: canoncialize_resources_path(resources_path),
+            resources_variant_count: parse_resources_variant_count_from_path(resources_path)
                 .unwrap(),
             recent_usage_time_window: Duration::from_secs(60 * 15),
             recent_usage_timestamps: Vec::new(),

@@ -2,6 +2,7 @@ mod autogrzybke;
 mod http_request_handler;
 mod player;
 mod volume_controller;
+mod schedule;
 
 use crate::autogrzybke::Autogrzybke;
 use crate::volume_controller::VolumeController;
@@ -14,7 +15,9 @@ use player::Player;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use anyhow::Context;
 use tokio::net::TcpListener;
+use crate::schedule::Scheduler;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -51,6 +54,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Args::parse().suffix_chance_percent,
     ));
 
+    let scheduler = Arc::new(Scheduler::new(player.clone(), Args::parse().autogrzybke_resources_path.as_str()).context("creating scheduler").unwrap());
+
     loop {
         let (stream, _) = listener.accept().await?;
 
@@ -61,6 +66,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let player = player.clone();
         let volume_controller = volume_controller.clone();
         let autogrzybke = autogrzybke.clone();
+        let scheduler = scheduler.clone();
+        let scheduler2 = scheduler.clone();
+
+        tokio::task::spawn(async move{
+            scheduler2.run_schedule().await;
+        });
 
         // Spawn a tokio task to serve multiple connections concurrently
         tokio::task::spawn(async {
@@ -75,6 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                             player.clone(),
                             volume_controller.clone(),
                             autogrzybke.clone(),
+                            scheduler.clone(),
                         )
                     }),
                 )
