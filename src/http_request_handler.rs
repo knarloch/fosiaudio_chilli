@@ -1,4 +1,5 @@
 use crate::autogrzybke::Autogrzybke;
+use crate::benny::Benny;
 use crate::player::Player;
 use crate::schedule;
 use crate::schedule::Scheduler;
@@ -18,6 +19,7 @@ pub async fn handle_request(
     volume_controller: Arc<VolumeController>,
     autogrzybke: Arc<Autogrzybke>,
     scheduler: Arc<Scheduler>,
+    benny: Arc<Benny>,
 ) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
     match (request.method(), request.uri().path()) {
         (&Method::GET, "/") => Ok(respond_with_root()),
@@ -29,8 +31,11 @@ pub async fn handle_request(
             match collect_request_body(request)
                 .await
                 .and_then(|b| get_value_from_form_body(b, "stream_url"))
-                .and_then(|url| player.play(url).map_err(|e| anyhow!(e)))
-            {
+                .and_then(|url| {
+                    player
+                        .play(url, chrono::Duration::seconds(0))
+                        .map_err(|e| anyhow!(e))
+                }) {
                 Ok(_) => Ok(respond_ok()),
                 Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
                     err.as_ref(),
@@ -120,7 +125,12 @@ pub async fn handle_request(
                 err.as_ref(),
             )),
         },
-
+        (&Method::POST, "/benny") => match benny.toggle() {
+            Ok(_) => Ok(respond_ok()),
+            Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
+                err.as_ref(),
+            )),
+        },
         _ => Ok(respond_not_found()),
     }
 }

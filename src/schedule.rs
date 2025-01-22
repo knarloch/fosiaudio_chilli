@@ -1,4 +1,4 @@
-use crate::autogrzybke::{canoncialize_resources_path, parse_resources_variant_count_from_path};
+use crate::autogrzybke::parse_resources_variant_count_from_path;
 use crate::player::Player;
 use anyhow::Context;
 use chrono::{DateTime, Local};
@@ -26,11 +26,13 @@ fn parse_and_filter_schedule(text: &str) -> Result<Vec<DateTime<Local>>, anyhow:
 
 pub const SCHEDULE_DEFAULT: &str = include_str!("schedule_default.yaml");
 impl SchedulerImpl {
-    fn new(player: Arc<Player>, resources_path: &str) -> Result<Self, anyhow::Error> {
+    fn new(player: Arc<Player>, resources_path: String) -> Result<Self, anyhow::Error> {
         Ok(SchedulerImpl {
             player: player,
-            resources_path: canoncialize_resources_path(resources_path),
-            resources_variant_count: parse_resources_variant_count_from_path(resources_path)?,
+            resources_variant_count: parse_resources_variant_count_from_path(
+                resources_path.as_str(),
+            )?,
+            resources_path: resources_path,
             schedule: parse_and_filter_schedule(SCHEDULE_DEFAULT)?,
         })
     }
@@ -48,7 +50,7 @@ pub struct Scheduler {
     schedule_impl: Mutex<SchedulerImpl>,
 }
 impl Scheduler {
-    pub fn new(player: Arc<Player>, resources_path: &str) -> Result<Self, anyhow::Error> {
+    pub fn new(player: Arc<Player>, resources_path: String) -> Result<Self, anyhow::Error> {
         Ok(Scheduler {
             schedule_impl: Mutex::new(SchedulerImpl::new(player, resources_path)?),
         })

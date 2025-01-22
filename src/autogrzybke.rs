@@ -47,11 +47,13 @@ struct AutogrzybkeImpl {
     suffix_chance_percent: u64,
 }
 impl AutogrzybkeImpl {
-    fn new(resources_path: &str, prefix_chance_percent: u64, suffix_chance_percent: u64) -> Self {
+    fn new(resources_path: String, prefix_chance_percent: u64, suffix_chance_percent: u64) -> Self {
         AutogrzybkeImpl {
-            resources_path: canoncialize_resources_path(resources_path),
-            resources_variant_count: parse_resources_variant_count_from_path(resources_path)
-                .unwrap(),
+            resources_variant_count: parse_resources_variant_count_from_path(
+                resources_path.as_str(),
+            )
+            .unwrap(),
+            resources_path: resources_path,
             recent_usage_time_window: Duration::from_secs(60 * 15),
             recent_usage_timestamps: Vec::new(),
             last_missing_list: Vec::new(),
@@ -182,13 +184,13 @@ pub struct Autogrzybke {
 }
 impl Autogrzybke {
     pub fn new(
-        resources_path: &str,
+        resources_abs_path: String,
         prefix_chance_percent: u64,
         suffix_chance_percent: u64,
     ) -> Self {
         Autogrzybke {
             autogrzybke_impl: Mutex::new(AutogrzybkeImpl::new(
-                resources_path,
+                resources_abs_path,
                 prefix_chance_percent,
                 suffix_chance_percent,
             )),

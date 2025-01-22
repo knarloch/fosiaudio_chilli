@@ -20,13 +20,17 @@ struct PlaybackCommand {
 }
 
 impl PlaybackCommand {
-    pub fn from_url(ffplay_path: &str, url: String) -> Self {
+    pub fn from_url(ffplay_path: &str, url: String, seek_pos: chrono::Duration) -> Self {
+        let start_time = chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap() + seek_pos;
+        info!("start_time: {}", start_time);
         let mut command = Command::new(ffplay_path);
         command
             .arg("-autoexit")
             .arg("-nodisp")
             .arg("-fflags")
             .arg("nobuffer")
+            .arg("-ss")
+            .arg(format!("{}", start_time))
             .arg(url.clone());
         PlaybackCommand {
             command: command,
@@ -96,6 +100,32 @@ impl PlayerState {
         }
     }
 
+    pub fn toggle_play(&mut self, playback_command: PlaybackCommand) -> Result<(), std::io::Error> {
+        info!("Toggle {}", playback_command.description);
+
+        match self {
+            PlayerState::Playing {
+                description: content_url,
+                ..
+            } => {
+                if *content_url == playback_command.description {
+                    info!("Already playing {}, pausing", *content_url);
+                    self.pause()
+                } else {
+                    self.pause()?;
+                    self.play(playback_command)
+                }
+            }
+            PlayerState::Paused {} => {
+                info!(
+                    "Not playing {}, start playback",
+                    playback_command.description
+                );
+                self.play(playback_command)
+            }
+        }
+    }
+
     pub fn pause(&mut self) -> Result<(), std::io::Error> {
         match self {
             PlayerState::Playing {
@@ -132,11 +162,31 @@ impl Player {
 }
 
 impl Player {
-    pub fn play(&self, new_content_url: String) -> Result<(), std::io::Error> {
+    pub fn play(
+        &self,
+        new_content_url: String,
+        seek_pos: chrono::Duration,
+    ) -> Result<(), std::io::Error> {
         self.state.lock().unwrap().play(PlaybackCommand::from_url(
             self.ffplay_path.as_str(),
             new_content_url,
+            seek_pos,
         ))
+    }
+
+    pub fn toggle_play(
+        &self,
+        new_content_url: String,
+        seek_pos: chrono::Duration,
+    ) -> Result<(), std::io::Error> {
+        self.state
+            .lock()
+            .unwrap()
+            .toggle_play(PlaybackCommand::from_url(
+                self.ffplay_path.as_str(),
+                new_content_url,
+                seek_pos,
+            ))
     }
 
     pub fn play_local_playlist(&self, playlist: Vec<String>) -> Result<(), std::io::Error> {

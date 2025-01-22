@@ -1,10 +1,12 @@
 mod autogrzybke;
+mod benny;
 mod http_request_handler;
 mod player;
 mod schedule;
 mod volume_controller;
 
-use crate::autogrzybke::Autogrzybke;
+use crate::autogrzybke::{canoncialize_resources_path, Autogrzybke};
+use crate::benny::Benny;
 use crate::schedule::Scheduler;
 use crate::volume_controller::VolumeController;
 use anyhow::Context;
@@ -46,22 +48,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let listener = TcpListener::bind(addr).await?;
 
+    let resources = canoncialize_resources_path(Args::parse().autogrzybke_resources_path.as_str());
     let player = Arc::new(Player::new(Args::parse().ffplay_path.as_str()));
     let volume_controller = Arc::new(VolumeController::new());
     let autogrzybke = Arc::new(Autogrzybke::new(
-        Args::parse().autogrzybke_resources_path.as_str(),
+        resources.clone(),
         Args::parse().prefix_chance_percent,
         Args::parse().suffix_chance_percent,
     ));
 
     let scheduler = Arc::new(
-        Scheduler::new(
-            player.clone(),
-            Args::parse().autogrzybke_resources_path.as_str(),
-        )
-        .context("creating scheduler")
-        .unwrap(),
+        Scheduler::new(player.clone(), resources.clone())
+            .context("creating scheduler")
+            .unwrap(),
     );
+
+    let benny = Arc::new(Benny::new(player.clone(), resources.as_str()));
 
     loop {
         let (stream, _) = listener.accept().await?;
@@ -73,6 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let player = player.clone();
         let volume_controller = volume_controller.clone();
         let autogrzybke = autogrzybke.clone();
+        let benny = benny.clone();
         let scheduler = scheduler.clone();
         let scheduler2 = scheduler.clone();
 
@@ -94,6 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                             volume_controller.clone(),
                             autogrzybke.clone(),
                             scheduler.clone(),
+                            benny.clone(),
                         )
                     }),
                 )
