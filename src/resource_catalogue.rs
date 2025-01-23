@@ -38,7 +38,7 @@ impl ResourceCatalogue {
     pub fn random_sample(&self, basename: &str) -> Option<String> {
         let mut rng = rand::rng();
         self.0
-            .get(basename)
+            .get(&basename.to_lowercase())
             .and_then(|matching_files| matching_files.choose(&mut rng))
             .map(|p| p.to_string_lossy().into())
     }
@@ -50,7 +50,8 @@ fn key_from_path(path: impl AsRef<Path>, base: impl AsRef<Path>) -> Option<Strin
     let prefix = prefix.to_string_lossy();
     let result = prefix[..prefix.len() - extension.len()]
         .trim_end_matches('.')
-        .trim_end_matches(char::is_numeric);
+        .trim_end_matches(char::is_numeric)
+        .to_lowercase();
     Some(String::from(result))
 }
 
@@ -87,5 +88,9 @@ mod test {
         assert_eq!(key_from_path("/dir/no_num.mp3", "/dir").unwrap(), "no_num");
         assert_eq!(key_from_path("/alpinus41.mp3", "/").unwrap(), "alpinus");
         assert_eq!(key_from_path("/dir/sub/f1.mp3", "/dir").unwrap(), "sub/f");
+        assert_eq!(
+            key_from_path("/dir/CAPITAL12.mp3", "/dir").unwrap(),
+            "capital"
+        );
     }
 }
