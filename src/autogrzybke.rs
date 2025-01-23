@@ -1,31 +1,13 @@
-use anyhow::{Context, Result};
-use log::{info, warn};
-use rand::seq::{IndexedRandom, SliceRandom};
+use anyhow::Context;
+use rand::seq::SliceRandom;
 use rand::RngCore;
-use std::collections::HashMap;
-use std::fs::{canonicalize, read_to_string};
+use std::iter;
 use std::ops::Add;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
-use std::{fs, iter};
 
-pub fn parse_resources_variant_count_from_path(path: &str) -> Result<u64> {
-    let sample_sets_count_txt = Path::new(path).join("sample_sets_count.txt");
-    let sample_sets_count_txt = sample_sets_count_txt.as_path();
-    let lines: u64 = read_to_string(sample_sets_count_txt)
-        .context(format!(
-            "Failed to read {}",
-            sample_sets_count_txt.display()
-        ))?
-        .trim()
-        .parse()
-        .context(format!(
-            "Failed to parse u64 from {}",
-            sample_sets_count_txt.display()
-        ))?;
-    Ok(lines)
-}
+use crate::resource_catalogue::{list_files_recursive, ResourceCatalogue};
 
 pub fn canoncialize_resources_path(resources_path: &str) -> String {
     std::fs::canonicalize(resources_path)
@@ -37,54 +19,6 @@ pub fn canoncialize_resources_path(resources_path: &str) -> String {
         .to_str()
         .unwrap()
         .to_string()
-}
-
-#[derive(Default)]
-struct ResourceCatalogue(HashMap<String, Vec<PathBuf>>);
-
-impl ResourceCatalogue {
-    fn try_from_dir_path(path: &Path) -> Result<Self> {
-        let mut catalogue: HashMap<String, Vec<PathBuf>> = HashMap::new();
-        info!(
-            "Reading autogrzybke resources dir {}",
-            path.to_string_lossy()
-        );
-        let base = canonicalize(&path).context("Can't canonicalize resources dir")?;
-        for path in list_files_recursive(&base).context("Error creating resource catalogue")? {
-            let Ok(path) = canonicalize(&path)
-                .inspect_err(|e| warn!("Can't canonicalize `{}`: {e}", path.to_string_lossy()))
-            else {
-                continue;
-            };
-            if !path.is_file() {
-                continue;
-            }
-
-            if let Some(key) = key_from_path(&path, &base) {
-                info!("Adding {} -> {}", key, path.to_string_lossy());
-                catalogue.entry(key).or_default().push(path);
-            }
-        }
-        Ok(Self(catalogue))
-    }
-
-    fn random_sample(&self, basename: &str) -> Option<String> {
-        let mut rng = rand::rng();
-        self.0
-            .get(basename)
-            .and_then(|matching_files| matching_files.choose(&mut rng))
-            .map(|p| p.to_string_lossy().into())
-    }
-}
-
-fn key_from_path(path: impl AsRef<Path>, base: impl AsRef<Path>) -> Option<String> {
-    let prefix = path.as_ref().strip_prefix(base).ok()?;
-    let extension = prefix.extension().unwrap_or_default().to_string_lossy();
-    let prefix = prefix.to_string_lossy();
-    let result = prefix[..prefix.len() - extension.len()]
-        .trim_end_matches('.')
-        .trim_end_matches(char::is_numeric);
-    Some(String::from(result))
 }
 
 struct AutogrzybkeImpl {
@@ -190,27 +124,6 @@ impl AutogrzybkeImpl {
     }
 }
 
-fn list_files_recursive(dir: impl AsRef<Path>) -> Result<Vec<PathBuf>> {
-    let mut output = Vec::new();
-    list_files_recursive_impl(dir.as_ref(), &mut output)?;
-    Ok(output)
-}
-
-fn list_files_recursive_impl(dir: &Path, list: &mut Vec<PathBuf>) -> Result<()> {
-    if dir.is_dir() {
-        for entry in fs::read_dir(dir).context(format!("Failed to read_dir {dir:?}"))? {
-            let entry = entry.context(format!("Failed to get entry from {dir:?}"))?;
-            let path = entry.path();
-            if path.is_dir() {
-                list_files_recursive_impl(&path, list)?;
-            } else {
-                list.push(path);
-            }
-        }
-    }
-    Ok(())
-}
-
 pub struct Autogrzybke {
     autogrzybke_impl: Mutex<AutogrzybkeImpl>,
 }
@@ -241,20 +154,5 @@ impl Autogrzybke {
 
     pub fn list_resources(&self) -> Vec<String> {
         self.autogrzybke_impl.lock().unwrap().list_resources()
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn key_from_path_test() {
-        assert_eq!(key_from_path("/dir1/file1.mp3", "/dir2"), None);
-        assert_eq!(key_from_path("/dir/hypys1.mp3", "/dir").unwrap(), "hypys");
-        assert_eq!(key_from_path("/dir/no_ext1", "/dir").unwrap(), "no_ext");
-        assert_eq!(key_from_path("/dir/no_num.mp3", "/dir").unwrap(), "no_num");
-        assert_eq!(key_from_path("/alpinus41.mp3", "/").unwrap(), "alpinus");
-        assert_eq!(key_from_path("/dir/sub/f1.mp3", "/dir").unwrap(), "sub/f");
     }
 }

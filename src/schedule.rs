@@ -1,15 +1,12 @@
-use crate::autogrzybke::parse_resources_variant_count_from_path;
 use crate::player::Player;
+use crate::resource_catalogue::ResourceCatalogue;
 use anyhow::Context;
 use chrono::{DateTime, Local};
 use log::*;
-use rand::Rng;
 use std::sync::{Arc, Mutex};
 
 struct SchedulerImpl {
     player: Arc<Player>,
-    resources_path: String,
-    resources_variant_count: u64,
     schedule: Vec<DateTime<Local>>,
 }
 
@@ -26,13 +23,9 @@ fn parse_and_filter_schedule(text: &str) -> Result<Vec<DateTime<Local>>, anyhow:
 
 pub const SCHEDULE_DEFAULT: &str = include_str!("schedule_default.yaml");
 impl SchedulerImpl {
-    fn new(player: Arc<Player>, resources_path: String) -> Result<Self, anyhow::Error> {
+    fn new(player: Arc<Player>) -> Result<Self, anyhow::Error> {
         Ok(SchedulerImpl {
             player: player,
-            resources_variant_count: parse_resources_variant_count_from_path(
-                resources_path.as_str(),
-            )?,
-            resources_path: resources_path,
             schedule: parse_and_filter_schedule(SCHEDULE_DEFAULT)?,
         })
     }
@@ -48,11 +41,13 @@ impl SchedulerImpl {
 
 pub struct Scheduler {
     schedule_impl: Mutex<SchedulerImpl>,
+    resources: ResourceCatalogue,
 }
 impl Scheduler {
     pub fn new(player: Arc<Player>, resources_path: String) -> Result<Self, anyhow::Error> {
         Ok(Scheduler {
-            schedule_impl: Mutex::new(SchedulerImpl::new(player, resources_path)?),
+            schedule_impl: Mutex::new(SchedulerImpl::new(player)?),
+            resources: ResourceCatalogue::try_from_dir_path(&resources_path)?,
         })
     }
 
@@ -80,18 +75,9 @@ impl Scheduler {
                             "Now: {:?}, closest_event: {:?}. Triggering event.",
                             now, closest_event
                         );
-                        let mut rng = rand::rng();
                         let playlist = ["idziemy_na_jednego"]
                             .iter()
-                            .map(|sample| {
-                                format!(
-                                    "{0}/{sample}{1}.mp3",
-                                    schedule_impl.resources_path,
-                                    rng.random::<u64>() % (schedule_impl.resources_variant_count)
-                                        + 1
-                                )
-                                .to_ascii_lowercase()
-                            })
+                            .flat_map(|sample| self.resources.random_sample(sample))
                             .collect();
                         schedule_impl
                             .player
