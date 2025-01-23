@@ -8,7 +8,7 @@ use anyhow::{anyhow, Context};
 use http::{Method, Request, Response, StatusCode};
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::Bytes;
-use log::error;
+use log::{debug, error, info};
 use std::convert::Infallible;
 use std::sync::Arc;
 use url_encoded_data::UrlEncodedData;
@@ -92,6 +92,9 @@ pub async fn handle_request(
                         .collect())
                 })
                 .and_then(|missing| Ok(autogrzybke.generate_playlist(missing)))
+                .inspect(|playlist| {
+                    info!("Generated playlist:\n{}", playlist.join("\n"));
+                })
                 .and_then(|playlist| player.play_local_playlist(playlist).map_err(|e| anyhow!(e)))
             {
                 Ok(_) => Ok(respond_ok()),
