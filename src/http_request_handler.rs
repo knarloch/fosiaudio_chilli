@@ -8,7 +8,7 @@ use anyhow::{anyhow, Context};
 use http::{Method, Request, Response, StatusCode};
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::Bytes;
-use log::{debug, error, info};
+use log::{error, info};
 use std::convert::Infallible;
 use std::sync::Arc;
 use url_encoded_data::UrlEncodedData;

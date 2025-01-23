@@ -2,6 +2,7 @@ mod autogrzybke;
 mod benny;
 mod http_request_handler;
 mod player;
+mod resource_catalogue;
 mod schedule;
 mod volume_controller;
 
