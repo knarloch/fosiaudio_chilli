@@ -1,4 +1,4 @@
-use crate::autogrzybke::Autogrzybke;
+use crate::autogrzybke::{Autogrzybke, AutogrzybkeRequest};
 use crate::benny::Benny;
 use crate::player::Player;
 use crate::resource_catalogue::ResourceCatalogue;
@@ -10,6 +10,7 @@ use http::{Method, Request, Response, StatusCode};
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::Bytes;
 use log::{error, info};
+use serde::de::DeserializeOwned;
 use std::convert::Infallible;
 use std::sync::Arc;
 use url_encoded_data::UrlEncodedData;
@@ -86,14 +87,10 @@ pub async fn handle_request(
         (&Method::POST, "/autogrzybke") => {
             match collect_request_body(request)
                 .await
-                .and_then(|b| get_value_from_form_body(b, "missing"))
-                .and_then(|missing| {
-                    Ok(missing
-                        .split_whitespace()
-                        .map(|slice| slice.into())
-                        .collect())
+                .and_then(|b| parse_urlencoded_body(b))
+                .and_then(|autogrzybke_req: AutogrzybkeRequest| {
+                    Ok(autogrzybke.generate_playlist(autogrzybke_req))
                 })
-                .and_then(|missing| Ok(autogrzybke.generate_playlist(missing)))
                 .inspect(|playlist| {
                     info!("Generated playlist:\n{}", playlist.join("\n"));
                 })
@@ -234,4 +231,13 @@ fn get_value_from_form_body(body: Bytes, name: &str) -> Result<String, anyhow::E
         Some((_, v)) => Ok(v.to_string()),
         None => Err(anyhow!(RequestBodyError::NameNotFound(name.into()))),
     }
+}
+
+fn parse_urlencoded_body<T: DeserializeOwned>(body: Bytes) -> Result<T, anyhow::Error> {
+    let chunk = body
+        .utf8_chunks()
+        .next()
+        .ok_or(anyhow!(RequestBodyError::EmptyBody))
+        .and_then(|chunk| Ok(chunk.valid()))?;
+    Ok(serde_urlencoded::from_str(chunk)?)
 }
