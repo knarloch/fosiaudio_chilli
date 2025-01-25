@@ -1,5 +1,6 @@
 use rand::seq::SliceRandom;
 use rand::Rng;
+use serde::{Deserialize, Deserializer};
 use std::iter;
 use std::ops::Add;
 use std::sync::{Arc, Mutex};
@@ -39,11 +40,11 @@ impl AutogrzybkeImpl {
         self.recent_usage_timestamps.len() as i64
     }
 
-    fn generate_playlist(&mut self, missing: Vec<String>) -> Vec<String> {
-        if missing.is_empty() {
+    fn generate_playlist(&mut self, req: AutogrzybkeRequest) -> Vec<String> {
+        if req.missing.is_empty() {
             self.generate_ready_playlist()
         } else {
-            self.generate_waiting_playlist(missing)
+            self.generate_waiting_playlist(req)
         }
     }
 
@@ -56,18 +57,21 @@ impl AutogrzybkeImpl {
             .collect()
     }
 
-    fn generate_waiting_playlist(&mut self, missing: Vec<String>) -> Vec<String> {
-        self.last_missing_list = missing.clone();
+    fn generate_waiting_playlist(&mut self, req: AutogrzybkeRequest) -> Vec<String> {
+        self.last_missing_list = req.missing.clone();
         self.last_missing_list.sort_unstable();
         let prefix_chance_percent = self.prefix_chance_percent;
         let suffix_chance_percent = self.suffix_chance_percent;
         let mut rng = rand::rng();
-        let mut missing = missing
+        let mut missing = req
+            .missing
             .iter()
             .map(|nick| {
                 let mut shoutout = Vec::new();
-                let shall_add_prefix = rng.random_range(0..100) < prefix_chance_percent;
-                let shall_add_suffix = rng.random_range(0..100) < suffix_chance_percent;
+                let shall_add_prefix =
+                    rng.random_range(0..100) < prefix_chance_percent && !req.skip_prefix;
+                let shall_add_suffix =
+                    rng.random_range(0..100) < suffix_chance_percent && !req.skip_suffix;
 
                 if shall_add_prefix || shall_add_suffix {
                     shoutout.push("silence".to_string());
@@ -85,13 +89,20 @@ impl AutogrzybkeImpl {
                 shoutout
             })
             .chain(
-                iter::repeat(vec!["kurwa".to_string()])
-                    .take(0.max((self.get_usage_count() - 1) / 2 - 1) as usize),
+                iter::repeat(vec!["kurwa".to_string()]).take(if !req.skip_interlude {
+                    0.max((self.get_usage_count() - 1) / 2 - 1) as usize
+                } else {
+                    0
+                }),
             )
             .collect::<Vec<Vec<String>>>();
         missing.shuffle(&mut rng);
         let mut words: Vec<String> = missing.into_iter().flatten().collect();
-        words.push("lobby".to_string());
+        words.extend(if !req.skip_lobby {
+            Some("lobby".to_string())
+        } else {
+            None
+        });
         words
             .iter()
             .flat_map(|sample| {
@@ -124,14 +135,35 @@ impl Autogrzybke {
             )),
         }
     }
-    pub fn generate_playlist(&self, missing: Vec<String>) -> Vec<String> {
-        self.autogrzybke_impl
-            .lock()
-            .unwrap()
-            .generate_playlist(missing)
+    pub fn generate_playlist(&self, req: AutogrzybkeRequest) -> Vec<String> {
+        self.autogrzybke_impl.lock().unwrap().generate_playlist(req)
     }
 
     pub fn get_last_missing(&self) -> Vec<String> {
         self.autogrzybke_impl.lock().unwrap().get_last_missing()
     }
+}
+
+#[derive(Deserialize)]
+pub struct AutogrzybkeRequest {
+    #[serde(deserialize_with = "deserialize_whitespace_separated")]
+    pub missing: Vec<String>,
+
+    // Optional customization flags
+    #[serde(default)]
+    pub skip_lobby: bool,
+    #[serde(default)]
+    pub skip_prefix: bool,
+    #[serde(default)]
+    pub skip_suffix: bool,
+    #[serde(default)]
+    pub skip_interlude: bool,
+}
+
+fn deserialize_whitespace_separated<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let text = String::deserialize(deserializer)?;
+    Ok(text.split_whitespace().map(String::from).collect())
 }
