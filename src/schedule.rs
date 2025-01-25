@@ -3,19 +3,19 @@ use crate::resource_catalogue::ResourceCatalogue;
 use anyhow::Context;
 use chrono::{DateTime, Local};
 use log::*;
+use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
 struct SchedulerImpl {
     player: Arc<Player>,
-    schedule: Vec<DateTime<Local>>,
+    schedule: BTreeSet<DateTime<Local>>,
 }
 
-fn parse_and_filter_schedule(text: &str) -> Result<Vec<DateTime<Local>>, anyhow::Error> {
+fn parse_and_filter_schedule(text: &str) -> Result<BTreeSet<DateTime<Local>>, anyhow::Error> {
     let now = Local::now();
-    let mut schedule: Vec<DateTime<Local>> =
+    let mut schedule: BTreeSet<DateTime<Local>> =
         serde_yaml::from_str(text).context(format!("Parse schedule from \"{text}\""))?;
     schedule.retain(|tp| *tp >= now);
-    schedule.sort_unstable();
     info!("now: {:?}", now);
     info!("Schedule: {:?}", schedule);
     Ok(schedule)
@@ -41,13 +41,16 @@ impl SchedulerImpl {
 
 pub struct Scheduler {
     schedule_impl: Mutex<SchedulerImpl>,
-    resources: ResourceCatalogue,
+    resources: Arc<ResourceCatalogue>,
 }
 impl Scheduler {
-    pub fn new(player: Arc<Player>, resources_path: String) -> Result<Self, anyhow::Error> {
+    pub fn new(
+        player: Arc<Player>,
+        resources: Arc<ResourceCatalogue>,
+    ) -> Result<Self, anyhow::Error> {
         Ok(Scheduler {
             schedule_impl: Mutex::new(SchedulerImpl::new(player)?),
-            resources: ResourceCatalogue::try_from_dir_path(&resources_path)?,
+            resources: resources,
         })
     }
 
@@ -64,8 +67,9 @@ impl Scheduler {
 
     pub async fn run_schedule(&self) -> () {
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
+        info!("Running schedule");
+        let mut last_cyclic_log = Local::now() - chrono::Duration::hours(1);
         loop {
-            interval.tick().await;
             let now = Local::now();
             {
                 let mut schedule_impl = self.schedule_impl.lock().unwrap();
@@ -84,11 +88,16 @@ impl Scheduler {
                             .play_local_playlist(playlist)
                             .context("play from schedule")
                             .unwrap_or_else(|e| log::error!("Failed to play schedule: {e}"));
-                        schedule_impl.schedule.remove(0);
+                        schedule_impl.schedule.pop_first().unwrap();
                         info!("Next closest_event: {:?}", schedule_impl.schedule.first());
+                    }
+                    if now - last_cyclic_log > chrono::Duration::seconds(60) {
+                        info!("Next closest_event: {:?}", schedule_impl.schedule.first());
+                        last_cyclic_log = now;
                     }
                 }
             }
+            interval.tick().await;
         }
     }
 }

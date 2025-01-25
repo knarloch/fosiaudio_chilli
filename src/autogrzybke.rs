@@ -1,29 +1,14 @@
-use anyhow::Context;
 use rand::seq::SliceRandom;
 use rand::RngCore;
 use std::iter;
 use std::ops::Add;
-use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use crate::resource_catalogue::{list_files_recursive, ResourceCatalogue};
-
-pub fn canoncialize_resources_path(resources_path: &str) -> String {
-    std::fs::canonicalize(resources_path)
-        .context(format!(
-            "Failed to use {resources_path} as autogrzybke resources path"
-        ))
-        .unwrap()
-        .as_os_str()
-        .to_str()
-        .unwrap()
-        .to_string()
-}
+use crate::resource_catalogue::ResourceCatalogue;
 
 struct AutogrzybkeImpl {
-    resources: ResourceCatalogue,
-    resources_path: String,
+    resources: Arc<ResourceCatalogue>,
     recent_usage_time_window: Duration,
     recent_usage_timestamps: Vec<SystemTime>,
     last_missing_list: Vec<String>,
@@ -31,10 +16,13 @@ struct AutogrzybkeImpl {
     suffix_chance_percent: u64,
 }
 impl AutogrzybkeImpl {
-    fn new(resources_path: String, prefix_chance_percent: u64, suffix_chance_percent: u64) -> Self {
+    fn new(
+        resources: Arc<ResourceCatalogue>,
+        prefix_chance_percent: u64,
+        suffix_chance_percent: u64,
+    ) -> Self {
         AutogrzybkeImpl {
-            resources: ResourceCatalogue::try_from_dir_path(&Path::new(&resources_path)).unwrap(),
-            resources_path: resources_path,
+            resources: resources,
             recent_usage_time_window: Duration::from_secs(60 * 15),
             recent_usage_timestamps: Vec::new(),
             last_missing_list: Vec::new(),
@@ -110,18 +98,6 @@ impl AutogrzybkeImpl {
     fn get_last_missing(&self) -> Vec<String> {
         self.last_missing_list.clone()
     }
-    fn list_resources(&self) -> Vec<String> {
-        match list_files_recursive(&self.resources_path) {
-            Ok(mut list) => {
-                list.sort();
-                list.iter()
-                    .map(|name| name.to_str().unwrap().to_string())
-                    .filter(|name| name.ends_with(".mp3"))
-                    .collect()
-            }
-            Err(e) => vec![e.to_string()],
-        }
-    }
 }
 
 pub struct Autogrzybke {
@@ -129,13 +105,13 @@ pub struct Autogrzybke {
 }
 impl Autogrzybke {
     pub fn new(
-        resources_abs_path: String,
+        resources: Arc<ResourceCatalogue>,
         prefix_chance_percent: u64,
         suffix_chance_percent: u64,
     ) -> Self {
         Autogrzybke {
             autogrzybke_impl: Mutex::new(AutogrzybkeImpl::new(
-                resources_abs_path,
+                resources,
                 prefix_chance_percent,
                 suffix_chance_percent,
             )),
@@ -150,9 +126,5 @@ impl Autogrzybke {
 
     pub fn get_last_missing(&self) -> Vec<String> {
         self.autogrzybke_impl.lock().unwrap().get_last_missing()
-    }
-
-    pub fn list_resources(&self) -> Vec<String> {
-        self.autogrzybke_impl.lock().unwrap().list_resources()
     }
 }

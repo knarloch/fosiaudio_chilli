@@ -8,10 +8,10 @@ pub struct Benny {
     file_path: String,
 }
 impl Benny {
-    pub fn new(player: Arc<Player>, resources_abs_path: &str) -> Self {
+    pub fn new(player: Arc<Player>, benny_abs_path: String) -> Self {
         Benny {
             player: player,
-            file_path: format!("{resources_abs_path}/benny.mp3"),
+            file_path: benny_abs_path,
         }
     }
 

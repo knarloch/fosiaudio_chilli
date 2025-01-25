@@ -6,11 +6,12 @@ mod resource_catalogue;
 mod schedule;
 mod volume_controller;
 
-use crate::autogrzybke::{canoncialize_resources_path, Autogrzybke};
+use crate::autogrzybke::Autogrzybke;
 use crate::benny::Benny;
+use crate::resource_catalogue::ResourceCatalogue;
 use crate::schedule::Scheduler;
 use crate::volume_controller::VolumeController;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use clap::Parser;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -49,7 +50,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let listener = TcpListener::bind(addr).await?;
 
-    let resources = canoncialize_resources_path(Args::parse().autogrzybke_resources_path.as_str());
+    let resources = Arc::new(ResourceCatalogue::try_from_dir_path(
+        Args::parse().autogrzybke_resources_path.as_str(),
+    )?);
     let player = Arc::new(Player::new(Args::parse().ffplay_path.as_str()));
     let volume_controller = Arc::new(VolumeController::new());
     let autogrzybke = Arc::new(Autogrzybke::new(
@@ -58,13 +61,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Args::parse().suffix_chance_percent,
     ));
 
-    let scheduler = Arc::new(
-        Scheduler::new(player.clone(), resources.clone())
-            .context("creating scheduler")
-            .unwrap(),
-    );
+    let scheduler =
+        Arc::new(Scheduler::new(player.clone(), resources.clone()).context("creating scheduler")?);
 
-    let benny = Arc::new(Benny::new(player.clone(), resources.as_str()));
+    let benny = Arc::new(Benny::new(
+        player.clone(),
+        resources
+            .random_sample("benny")
+            .ok_or(anyhow!("Cannot find benny.mp3 in resource resources"))?,
+    ));
+
+    let scheduler2 = scheduler.clone();
+    tokio::task::spawn(async move {
+        scheduler2.clone().run_schedule().await;
+    });
 
     loop {
         let (stream, _) = listener.accept().await?;
@@ -76,13 +86,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let player = player.clone();
         let volume_controller = volume_controller.clone();
         let autogrzybke = autogrzybke.clone();
-        let benny = benny.clone();
         let scheduler = scheduler.clone();
-        let scheduler2 = scheduler.clone();
-
-        tokio::task::spawn(async move {
-            scheduler2.run_schedule().await;
-        });
+        let benny = benny.clone();
+        let resources = resources.clone();
 
         // Spawn a tokio task to serve multiple connections concurrently
         tokio::task::spawn(async {
@@ -99,6 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                             autogrzybke.clone(),
                             scheduler.clone(),
                             benny.clone(),
+                            resources.clone(),
                         )
                     }),
                 )

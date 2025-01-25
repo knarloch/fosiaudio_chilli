@@ -12,6 +12,7 @@ use log::{error, info};
 use std::convert::Infallible;
 use std::sync::Arc;
 use url_encoded_data::UrlEncodedData;
+use crate::resource_catalogue::ResourceCatalogue;
 
 pub async fn handle_request(
     request: Request<hyper::body::Incoming>,
@@ -20,6 +21,7 @@ pub async fn handle_request(
     autogrzybke: Arc<Autogrzybke>,
     scheduler: Arc<Scheduler>,
     benny: Arc<Benny>,
+    resources_catalogue: Arc<ResourceCatalogue>,
 ) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
     match (request.method(), request.uri().path()) {
         (&Method::GET, "/") => Ok(respond_with_root()),
@@ -57,7 +59,7 @@ pub async fn handle_request(
             }
         }
         (&Method::GET, "/listserverfiles") => {
-            Ok(respond_with_html(autogrzybke.list_resources().join("\n")))
+            Ok(respond_with_html(resources_catalogue.get_joned_list_of_files().to_string()))
         }
         (&Method::POST, "/change_volume") => {
             match collect_request_body(request)

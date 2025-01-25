@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fs::canonicalize;
 use std::path::{Path, PathBuf};
 
@@ -7,7 +7,7 @@ use log::{info, warn};
 use rand::seq::IndexedRandom as _;
 
 #[derive(Default)]
-pub struct ResourceCatalogue(HashMap<String, Vec<PathBuf>>);
+pub struct ResourceCatalogue(HashMap<String, Vec<PathBuf>>, String);
 
 impl ResourceCatalogue {
     pub fn try_from_dir_path(path: impl AsRef<Path>) -> Result<Self> {
@@ -23,16 +23,21 @@ impl ResourceCatalogue {
             else {
                 continue;
             };
-            if !path.is_file() {
+            if !path.is_file() || !path.to_string_lossy().ends_with(".mp3") {
                 continue;
             }
 
             if let Some(key) = key_from_path(&path, &base) {
-                // info!("Adding {} -> {}", key, path.to_string_lossy());
                 catalogue.entry(key).or_default().push(path);
             }
         }
-        Ok(Self(catalogue))
+        let joined_list_of_files = catalogue
+            .values()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .flatten()
+            .fold("".to_string(), |acc, p| acc + &p.to_string_lossy() + "\n");
+        Ok(Self(catalogue, joined_list_of_files))
     }
 
     pub fn random_sample(&self, basename: &str) -> Option<String> {
@@ -41,6 +46,10 @@ impl ResourceCatalogue {
             .get(&basename.to_lowercase())
             .and_then(|matching_files| matching_files.choose(&mut rng))
             .map(|p| p.to_string_lossy().into())
+    }
+
+    pub fn get_joned_list_of_files(&self) -> &str {
+        self.1.as_str()
     }
 }
 
