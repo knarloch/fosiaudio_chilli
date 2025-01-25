@@ -1,6 +1,7 @@
 use crate::autogrzybke::Autogrzybke;
 use crate::benny::Benny;
 use crate::player::Player;
+use crate::resource_catalogue::ResourceCatalogue;
 use crate::schedule;
 use crate::schedule::Scheduler;
 use crate::volume_controller::VolumeController;
@@ -12,7 +13,6 @@ use log::{error, info};
 use std::convert::Infallible;
 use std::sync::Arc;
 use url_encoded_data::UrlEncodedData;
-use crate::resource_catalogue::ResourceCatalogue;
 
 pub async fn handle_request(
     request: Request<hyper::body::Incoming>,
@@ -58,9 +58,9 @@ pub async fn handle_request(
                 )),
             }
         }
-        (&Method::GET, "/listserverfiles") => {
-            Ok(respond_with_html(resources_catalogue.get_joned_list_of_files().to_string()))
-        }
+        (&Method::GET, "/listserverfiles") => Ok(respond_with_html(
+            resources_catalogue.get_joned_list_of_files().to_string(),
+        )),
         (&Method::POST, "/change_volume") => {
             match collect_request_body(request)
                 .await

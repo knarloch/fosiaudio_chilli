@@ -1,5 +1,5 @@
 use rand::seq::SliceRandom;
-use rand::RngCore;
+use rand::Rng;
 use std::iter;
 use std::ops::Add;
 use std::sync::{Arc, Mutex};
@@ -66,13 +66,20 @@ impl AutogrzybkeImpl {
             .iter()
             .map(|nick| {
                 let mut shoutout = Vec::new();
-                if rng.next_u64() % 100 <= prefix_chance_percent {
+                let shall_add_prefix = rng.random_range(0..100) < prefix_chance_percent;
+                let shall_add_suffix = rng.random_range(0..100) < suffix_chance_percent;
+
+                if shall_add_prefix || shall_add_suffix {
                     shoutout.push("silence".to_string());
+                }
+                if shall_add_prefix {
                     shoutout.push("prefix".to_string());
                 }
                 shoutout.push(nick.clone());
-                if rng.next_u64() % 100 <= suffix_chance_percent {
+                if shall_add_suffix {
                     shoutout.push("suffix".to_string());
+                }
+                if shall_add_prefix || shall_add_suffix {
                     shoutout.push("silence".to_string());
                 }
                 shoutout
