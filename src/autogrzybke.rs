@@ -53,7 +53,7 @@ impl AutogrzybkeImpl {
     fn generate_ready_playlist(&mut self) -> Vec<String> {
         self.recent_usage_timestamps.clear();
         self.last_missing_list.clear();
-        ["everyone", "ready"]
+        ["noise", "everyone", "ready"]
             .iter()
             .flat_map(|sample| self.resources.random_sample(sample))
             .collect()
@@ -99,7 +99,8 @@ impl AutogrzybkeImpl {
             )
             .collect::<Vec<Vec<String>>>();
         missing.shuffle(&mut rng);
-        let mut words: Vec<String> = missing.into_iter().flatten().collect();
+        let mut words = vec!["noise".to_string()];
+        words.extend(missing.into_iter().flatten());
         words.extend(if !req.skip_lobby {
             Some("lobby".to_string())
         } else {

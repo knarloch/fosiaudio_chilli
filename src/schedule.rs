@@ -79,7 +79,7 @@ impl Scheduler {
                             "Now: {:?}, closest_event: {:?}. Triggering event.",
                             now, closest_event
                         );
-                        let playlist = ["idziemy_na_jednego"]
+                        let playlist = ["noise", "idziemy_na_jednego"]
                             .iter()
                             .flat_map(|sample| self.resources.random_sample(sample))
                             .collect();
