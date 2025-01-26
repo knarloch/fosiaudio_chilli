@@ -1,3 +1,4 @@
+use log::info;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Deserializer};
@@ -41,6 +42,7 @@ impl AutogrzybkeImpl {
     }
 
     fn generate_playlist(&mut self, req: AutogrzybkeRequest) -> Vec<String> {
+        info!("AUTOGRZYBKE REQUEST: {req:?}");
         if req.missing.is_empty() {
             self.generate_ready_playlist()
         } else {
@@ -144,7 +146,7 @@ impl Autogrzybke {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct AutogrzybkeRequest {
     #[serde(deserialize_with = "deserialize_whitespace_separated")]
     pub missing: Vec<String>,
