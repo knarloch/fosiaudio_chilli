@@ -74,7 +74,9 @@ impl Scheduler {
             {
                 let mut schedule_impl = self.schedule_impl.lock().unwrap();
                 if let Some(closest_event) = schedule_impl.schedule.first() {
-                    if *closest_event <= now {
+                    if *closest_event <= now
+                        && (now - *closest_event).abs() <= chrono::Duration::seconds(60)
+                    {
                         info!(
                             "Now: {:?}, closest_event: {:?}. Triggering event.",
                             now, closest_event
