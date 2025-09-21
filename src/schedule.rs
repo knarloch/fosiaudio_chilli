@@ -74,22 +74,26 @@ impl Scheduler {
             {
                 let mut schedule_impl = self.schedule_impl.lock().unwrap();
                 if let Some(closest_event) = schedule_impl.schedule.first() {
-                    if *closest_event <= now
-                        && (now - *closest_event).abs() <= chrono::Duration::seconds(60)
-                    {
+                    if *closest_event <= now {
                         info!(
-                            "Now: {:?}, closest_event: {:?}. Triggering event.",
+                            "Now: {:?}, closest_event: {:?} is in the past.",
                             now, closest_event
                         );
-                        let playlist = ["noise", "idziemy_na_jednego"]
-                            .iter()
-                            .flat_map(|sample| self.resources.random_sample(sample))
-                            .collect();
-                        schedule_impl
-                            .player
-                            .play_local_playlist(playlist)
-                            .context("play from schedule")
-                            .unwrap_or_else(|e| log::error!("Failed to play schedule: {e}"));
+                        if (now - *closest_event).abs() <= chrono::Duration::seconds(60) {
+                            info!(
+                                "Now: {:?}, closest_event: {:?} happened less than 60s ago, triggering.",
+                                now, closest_event
+                            );
+                            let playlist = ["noise", "idziemy_na_jednego"]
+                                .iter()
+                                .flat_map(|sample| self.resources.random_sample(sample))
+                                .collect();
+                            schedule_impl
+                                .player
+                                .play_local_playlist(playlist)
+                                .context("play from schedule")
+                                .unwrap_or_else(|e| log::error!("Failed to play schedule: {e}"));
+                        }
                         schedule_impl.schedule.pop_first().unwrap();
                         info!("Next closest_event: {:?}", schedule_impl.schedule.first());
                     }
