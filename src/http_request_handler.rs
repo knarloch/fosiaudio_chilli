@@ -151,6 +151,7 @@ where
 fn respond_with_html(html: String) -> Response<BoxBody<Bytes, Infallible>> {
     Response::builder()
         .status(StatusCode::OK)
+        .header("Cache-Control", "no-store")
         .body(Full::new(Bytes::from(html)).boxed())
         .unwrap()
 }
