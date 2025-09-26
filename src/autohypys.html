@@ -9,7 +9,16 @@
 <h1>Idziemy na jednego:</h1>
 <form action="/autohypys" method="post">
     <textarea name="schedule" cols="64" rows="20">SCHEDULE</textarea><br>
-    <input type="submit" value="Set schedule">
+    <input style="font-size:2em;" type="submit" value="🍻">
+</form>
+<br><br>
+<form action="/autohypys/generate_schedule" method="post" class="form-inline">
+    <label for="generate_schedule_period_minutes">Let's go every</label>
+    <input id="generate_schedule_period_minutes" type="number" value="30" min="5" max="180" step="5"
+           name="generate_schedule_period_minutes">
+    <label for="generate_schedule_end_time_of_day">minutes until</label>
+    <input id="generate_schedule_end_time_of_day" type="time" value="23:00" name="generate_schedule_end_time_of_day">
+    <input style="font-size:2em;" type="submit" value="🍻">
 </form>
 <br><br>
 <form action="/autohypys/reset" method="post">

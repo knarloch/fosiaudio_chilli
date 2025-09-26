@@ -1,7 +1,7 @@
 use crate::player::Player;
 use crate::resource_catalogue::ResourceCatalogue;
 use anyhow::Context;
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Duration, Local, NaiveTime};
 use log::*;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
@@ -62,6 +62,25 @@ impl Scheduler {
         let schedule =
             parse_and_filter_schedule(text).context(format!("Parse schedule from \"{text}\""))?;
         self.schedule_impl.lock().unwrap().schedule = schedule;
+        Ok(())
+    }
+
+    pub fn generate_schedule(
+        &self,
+        period: Duration,
+        until: NaiveTime,
+    ) -> Result<(), anyhow::Error> {
+        let now = Local::now();
+        let deadline = now.naive_local().date().and_time(until);
+        let mut event = now.naive_local();
+        let mut generated_schedule= BTreeSet::new();
+        while event <= deadline {
+            generated_schedule.insert(event.and_local_timezone(Local).single().ok_or(
+                anyhow::format_err!("Conversion to local timezone did not produce unique result"),
+            )?);
+            event += period;
+        }
+        self.schedule_impl.lock().unwrap().schedule = generated_schedule;
         Ok(())
     }
 

@@ -1,16 +1,19 @@
 use crate::autogrzybke::{Autogrzybke, AutogrzybkeRequest};
 use crate::benny::Benny;
+use crate::http_request_handler::RequestBodyError::NameNotFound;
 use crate::player::Player;
 use crate::resource_catalogue::ResourceCatalogue;
 use crate::schedule;
 use crate::schedule::Scheduler;
 use crate::volume_controller::VolumeController;
 use anyhow::{anyhow, Context};
+use chrono::{Duration, NaiveTime};
 use http::{Method, Request, Response, StatusCode};
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::Bytes;
 use log::{error, info};
 use serde::de::DeserializeOwned;
+use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
 use url_encoded_data::UrlEncodedData;
@@ -118,6 +121,36 @@ pub async fn handle_request(
                 )),
             }
         }
+        (&Method::POST, "/autohypys/generate_schedule") => {
+            match collect_request_body(request)
+                .await
+                .and_then(|b| get_values_from_form_body(b))
+                .and_then(|params| {
+                    let period: Duration = Duration::minutes(
+                        params
+                            .get("generate_schedule_period_minutes")
+                            .ok_or(anyhow!(RequestBodyError::NameNotFound(
+                                "generate_schedule_period_minutes".to_string()
+                            )))?
+                            .parse()?,
+                    );
+                    let end_time_of_day = NaiveTime::parse_from_str(
+                        &params
+                            .get("generate_schedule_end_time_of_day")
+                            .ok_or(anyhow!(NameNotFound(
+                                "generate_schedule_end_time_of_day".to_string()
+                            )))?,
+                        "%H:%M",
+                    )
+                    .map_err(|e| anyhow!(e))?;
+                    scheduler.generate_schedule(period, end_time_of_day)
+                }) {
+                Ok(_) => Ok(respond_with_schedule(scheduler.get_serialized_schedule())),
+                Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
+                    err.as_ref(),
+                )),
+            }
+        }
         (&Method::POST, "/autohypys/reset") => match scheduler
             .set_schedule(schedule::SCHEDULE_DEFAULT)
             .context("Handle POST /autohypys/reset")
@@ -219,19 +252,23 @@ pub enum RequestBodyError {
     NameNotFound(String),
 }
 
-fn get_value_from_form_body(body: Bytes, name: &str) -> Result<String, anyhow::Error> {
+fn get_values_from_form_body(body: Bytes) -> Result<HashMap<String, String>, anyhow::Error> {
     let chunk = body
         .utf8_chunks()
         .next()
         .ok_or(anyhow!(RequestBodyError::EmptyBody))
         .and_then(|chunk| Ok(chunk.valid()))?;
-    match UrlEncodedData::parse_str(chunk)
+    Ok(UrlEncodedData::parse_str(chunk)
+        .as_map_of_single_key_to_last_occurrence_value()
         .iter()
-        .find(|(k, _)| **k == name)
-    {
-        Some((_, v)) => Ok(v.to_string()),
-        None => Err(anyhow!(RequestBodyError::NameNotFound(name.into()))),
-    }
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect())
+}
+
+fn get_value_from_form_body(body: Bytes, name: &str) -> Result<String, anyhow::Error> {
+    get_values_from_form_body(body)?
+        .remove(name)
+        .ok_or(anyhow!(RequestBodyError::NameNotFound(name.to_string())))
 }
 
 fn parse_urlencoded_body<T: DeserializeOwned>(body: Bytes) -> Result<T, anyhow::Error> {
