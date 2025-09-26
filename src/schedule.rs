@@ -1,9 +1,10 @@
 use crate::player::Player;
 use crate::resource_catalogue::ResourceCatalogue;
 use anyhow::Context;
-use chrono::{DateTime, Duration, Local, NaiveTime};
+use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use log::*;
 use std::collections::BTreeSet;
+use std::ops::Add;
 use std::sync::{Arc, Mutex};
 
 struct SchedulerImpl {
@@ -68,20 +69,30 @@ impl Scheduler {
     pub fn generate_schedule(
         &self,
         period: Duration,
-        until: NaiveTime,
+        until: NaiveDateTime,
     ) -> Result<(), anyhow::Error> {
-        let now = Local::now();
-        let deadline = now.naive_local().date().and_time(until);
-        let mut event = now.naive_local();
-        let mut generated_schedule= BTreeSet::new();
+        let deadline = until
+            .and_local_timezone(Local)
+            .single()
+            .ok_or(anyhow::format_err!(
+                "Failed to convert NaiveDateTime to local timezone"
+            ))?;
+        let mut event = Local::now() + period;
+        let mut generated_schedule = BTreeSet::new();
         while event <= deadline {
-            generated_schedule.insert(event.and_local_timezone(Local).single().ok_or(
-                anyhow::format_err!("Conversion to local timezone did not produce unique result"),
-            )?);
+            generated_schedule.insert(event);
             event += period;
         }
         self.schedule_impl.lock().unwrap().schedule = generated_schedule;
         Ok(())
+    }
+
+    pub fn get_default_schedule_end_string() -> String {
+        let mut schedule_end = Local::now().date_naive().and_hms_opt(23, 0, 0).unwrap();
+        if schedule_end < Local::now().naive_local() {
+            schedule_end = schedule_end.add(Duration::days(1));
+        }
+        schedule_end.to_string()
     }
 
     pub async fn run_schedule(&self) -> () {

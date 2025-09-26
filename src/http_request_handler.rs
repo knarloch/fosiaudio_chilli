@@ -7,7 +7,7 @@ use crate::schedule;
 use crate::schedule::Scheduler;
 use crate::volume_controller::VolumeController;
 use anyhow::{anyhow, Context};
-use chrono::{Duration, NaiveTime};
+use chrono::{Duration, NaiveDateTime};
 use http::{Method, Request, Response, StatusCode};
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::Bytes;
@@ -106,16 +106,20 @@ pub async fn handle_request(
             }
         }
         (&Method::GET, "/jukebox") => Ok(respond_with_jukebox()),
-        (&Method::GET, "/autohypys") => {
-            Ok(respond_with_schedule(scheduler.get_serialized_schedule()))
-        }
+        (&Method::GET, "/autohypys") => Ok(respond_with_schedule(
+            scheduler.get_serialized_schedule(),
+            Scheduler::get_default_schedule_end_string(),
+        )),
         (&Method::POST, "/autohypys") => {
             match collect_request_body(request)
                 .await
                 .and_then(|b| get_value_from_form_body(b, "schedule"))
                 .and_then(|text| scheduler.set_schedule(text.as_str()))
             {
-                Ok(_) => Ok(respond_with_schedule(scheduler.get_serialized_schedule())),
+                Ok(_) => Ok(respond_with_schedule(
+                    scheduler.get_serialized_schedule(),
+                    Scheduler::get_default_schedule_end_string(),
+                )),
                 Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
                     err.as_ref(),
                 )),
@@ -134,18 +138,23 @@ pub async fn handle_request(
                             )))?
                             .parse()?,
                     );
-                    let end_time_of_day = NaiveTime::parse_from_str(
+                    let end_date_time = NaiveDateTime::parse_from_str(
                         &params
-                            .get("generate_schedule_end_time_of_day")
+                            .get("generate_schedule_end_datetime_local")
                             .ok_or(anyhow!(NameNotFound(
-                                "generate_schedule_end_time_of_day".to_string()
+                                "generate_schedule_end_datetime_local".to_string()
                             )))?,
-                        "%H:%M",
+                        "%Y-%m-%dT%H:%M",
                     )
-                    .map_err(|e| anyhow!(e))?;
-                    scheduler.generate_schedule(period, end_time_of_day)
+                    .map_err(|e| {
+                        anyhow!(e).context("Failed to parse generate_schedule_end_datetime_local")
+                    })?;
+                    scheduler.generate_schedule(period, end_date_time)
                 }) {
-                Ok(_) => Ok(respond_with_schedule(scheduler.get_serialized_schedule())),
+                Ok(_) => Ok(respond_with_schedule(
+                    scheduler.get_serialized_schedule(),
+                    Scheduler::get_default_schedule_end_string(),
+                )),
                 Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
                     err.as_ref(),
                 )),
@@ -155,7 +164,10 @@ pub async fn handle_request(
             .set_schedule(schedule::SCHEDULE_DEFAULT)
             .context("Handle POST /autohypys/reset")
         {
-            Ok(_) => Ok(respond_with_schedule(scheduler.get_serialized_schedule())),
+            Ok(_) => Ok(respond_with_schedule(
+                scheduler.get_serialized_schedule(),
+                Scheduler::get_default_schedule_end_string(),
+            )),
             Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
                 err.as_ref(),
             )),
@@ -207,11 +219,13 @@ fn respond_with_jukebox() -> Response<BoxBody<Bytes, Infallible>> {
 
 fn respond_with_schedule(
     schedule_text: Result<String, anyhow::Error>,
+    schedule_end_default: String,
 ) -> Response<BoxBody<Bytes, Infallible>> {
     match schedule_text {
         Ok(text) => {
             let html = include_str!("autohypys.html").to_string();
-            let html = html.replace("SCHEDULE", text.as_str());
+            let html = html.replace("SCHEDULE_CONTENT", text.as_str());
+            let html = html.replace("SCHEDULE_END_DEFAULT", schedule_end_default.as_str());
             respond_with_html(html)
         }
         Err(e) => respond_with_html(format!("{e}")),
