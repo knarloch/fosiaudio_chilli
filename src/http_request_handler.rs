@@ -97,8 +97,13 @@ pub async fn handle_request(
                 .inspect(|playlist| {
                     info!("Generated playlist:\n{}", playlist.join("\n"));
                 })
-                .and_then(|playlist| player.play_local_playlist(playlist).map_err(|e| anyhow!(e)))
-            {
+                .and_then(|playlist| {
+                    if playlist.is_empty() {
+                        anyhow::bail!("Empty playlist. Resources not available?")
+                    } else {
+                        player.play_local_playlist(playlist).map_err(|e| anyhow!(e))
+                    }
+                }) {
                 Ok(_) => Ok(respond_ok()),
                 Err(err) => Ok(report_internal_server_error::<&dyn std::error::Error>(
                     err.as_ref(),

@@ -16,7 +16,10 @@ impl ResourceCatalogue {
             "Reading autogrzybke resources dir {}",
             path.as_ref().to_string_lossy()
         );
-        let base = canonicalize(&path).context("Can't canonicalize resources dir")?;
+        let base = canonicalize(&path).context(format!(
+            "Can't canonicalize resources dir: {}",
+            path.as_ref().to_string_lossy()
+        ))?;
         for path in list_files_recursive(&base).context("Error creating resource catalogue")? {
             let Ok(path) = canonicalize(&path)
                 .inspect_err(|e| warn!("Can't canonicalize `{}`: {e}", path.to_string_lossy()))

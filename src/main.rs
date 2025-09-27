@@ -11,7 +11,7 @@ use crate::benny::Benny;
 use crate::resource_catalogue::ResourceCatalogue;
 use crate::schedule::Scheduler;
 use crate::volume_controller::VolumeController;
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use clap::Parser;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -50,9 +50,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let listener = TcpListener::bind(addr).await?;
 
-    let resources = Arc::new(ResourceCatalogue::try_from_dir_path(
-        Args::parse().autogrzybke_resources_path.as_str(),
-    )?);
+    let resources = Arc::new(
+        ResourceCatalogue::try_from_dir_path(Args::parse().autogrzybke_resources_path.as_str())
+            .inspect_err(|e| warn!("Failed to load resource catalogue: {e:?}"))
+            .unwrap_or(ResourceCatalogue::default()),
+    );
     let player = Arc::new(Player::new(Args::parse().ffplay_path.as_str()));
     let volume_controller = Arc::new(VolumeController::new());
     let autogrzybke = Arc::new(Autogrzybke::new(
@@ -64,12 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let scheduler =
         Arc::new(Scheduler::new(player.clone(), resources.clone()).context("creating scheduler")?);
 
-    let benny = Arc::new(Benny::new(
-        player.clone(),
-        resources
-            .random_sample("benny")
-            .ok_or(anyhow!("Cannot find benny.mp3 in resource resources"))?,
-    ));
+    let benny = Arc::new(Benny::new(player.clone(), resources.random_sample("benny")));
 
     let scheduler2 = scheduler.clone();
     tokio::task::spawn(async move {
