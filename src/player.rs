@@ -85,6 +85,11 @@ impl PlayerState {
                 info!("Restart raspotify.service to make sure audio card is available");
                 Command::new("sudo")
                     .arg("systemctl")
+                    .arg("reset-failed")
+                    .arg("raspotify.service")
+                    .spawn()?;
+                    Command::new("sudo")
+                    .arg("systemctl")
                     .arg("restart")
                     .arg("raspotify.service")
                     .spawn()?;
