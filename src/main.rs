@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let resources = Arc::new(
         ResourceCatalogue::try_from_dir_path(Args::parse().autogrzybke_resources_path.as_str())
-            .inspect_err(|e| warn!("Failed to load resource catalogue: {e:?}"))
+            .inspect_err(|e| warn!("Failed to load resource catalogue: {e:?}. Using default."))
             .unwrap_or(ResourceCatalogue::default()),
     );
     let player = Arc::new(Player::new(Args::parse().ffplay_path.as_str()));

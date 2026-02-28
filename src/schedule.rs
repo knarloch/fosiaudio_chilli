@@ -96,6 +96,15 @@ impl Scheduler {
     }
 
     pub async fn run_schedule(&self) -> () {
+        const SAMPLE_NOISE: &str = "noise";
+        const SAMPLE_LETSGO: &str = "idziemy_na_jednego";
+
+        if self.resources.random_sample(SAMPLE_NOISE).is_none()
+            || self.resources.random_sample(SAMPLE_LETSGO).is_none()
+        {
+            info!("Samples missing, not running the schedule");
+            return;
+        }
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
         info!("Running schedule");
         let mut last_cyclic_log = Local::now() - chrono::Duration::hours(1);
@@ -114,7 +123,7 @@ impl Scheduler {
                                 "Now: {:?}, closest_event: {:?} happened less than 60s ago, triggering.",
                                 now, closest_event
                             );
-                            let playlist = ["noise", "idziemy_na_jednego"]
+                            let playlist = [SAMPLE_NOISE, SAMPLE_LETSGO]
                                 .iter()
                                 .flat_map(|sample| self.resources.random_sample(sample))
                                 .collect();
