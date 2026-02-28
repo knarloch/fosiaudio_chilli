@@ -28,7 +28,7 @@ pub async fn handle_request(
     resources_catalogue: Arc<ResourceCatalogue>,
 ) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
     match (request.method(), request.uri().path()) {
-        (&Method::GET, "/") => Ok(respond_with_root()),
+        (&Method::GET, "/") => Ok(respond_with_root(&resources_catalogue)),
         (&Method::POST, "/pause") => match player.pause() {
             Ok(_) => Ok(respond_ok()),
             Err(err) => Ok(report_internal_server_error(err)),
@@ -206,8 +206,16 @@ fn respond_with_html(html: String) -> Response<BoxBody<Bytes, Infallible>> {
         .unwrap()
 }
 
-fn respond_with_root() -> Response<BoxBody<Bytes, Infallible>> {
-    let html = include_str!("fosiaudio_chilli.html").to_string();
+fn respond_with_root(
+    resources_catalogue: &Arc<ResourceCatalogue>,
+) -> Response<BoxBody<Bytes, Infallible>> {
+    let html = match resources_catalogue.get_joned_list_of_files().is_empty() {
+        true => include_str!("fosiaudio_chilli.html").to_string(),
+        false => {
+            include_str!("fosiaudio_chilli.html").to_string()
+                + include_str!("lanparty_features.html")
+        }
+    };
     respond_with_html(html)
 }
 
